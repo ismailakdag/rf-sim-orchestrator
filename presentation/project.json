@@ -1,0 +1,43 @@
+{
+  "id": "rf-sim-orchestrator",
+  "title": "Uzak simülasyon altyapısı",
+  "headline": "Hesaplama uzakta. <em>Kanıtlar birlikte.</em>",
+  "intro": "Ana bilgisayardan okul bilgisayarlarına bağımsız simülasyon işleri dağıtmak ve bütün sonuç dosyalarını doğrulanmış paketler halinde geri toplamak için host–worker altyapısı.",
+  "repo": "https://github.com/ismailakdag/rf-sim-orchestrator",
+  "flow": [
+    "Ana bilgisayar · kalıcı iş kuyruğu",
+    "Okul bilgisayarı · tek işçi",
+    "Hash doğrulamalı sonuç paketi"
+  ],
+  "diagram_alt": "Ana bilgisayardaki kuyruktan okul işçisine ve sonuç arşivine akış",
+  "diagram_caption": "İşçi ana bilgisayara dışarı doğru bağlanır. Dağıtılanlar bağımsız işlerdir; tek bir solver çözümünü bilgisayarlara bölme iddiası yoktur.",
+  "status": "Host–worker uygulaması tamamlandı; 25 yerel test geçti.",
+  "finding_title": "Yalnız skor değil, yeniden üretilebilir sonuç.",
+  "finding": "Her işin kimliği ve kaynağı, çalıştırma durumu ve dosya bütünlüğü birlikte izleniyor. Bağlantı kaybından sonra pahalı bir çözüm sessizce tekrar başlatılmıyor.",
+  "work": [
+    {
+      "title": "İş sahipliği",
+      "body": "Kalıcı kuyruk, süreli iş sahipliği ve heartbeat. Süresi dolan belirsiz iş incelemeye ayrılır."
+    },
+    {
+      "title": "Tam sonuç aktarımı",
+      "body": "Model, VBA, parametreler, kompleks S, mesh, log ve kalite dosyaları; her dosya için boyut ve SHA-256."
+    },
+    {
+      "title": "Yerel kontrol",
+      "body": "Kimlik doğrulama, izin verilen çalıştırıcılar, sınırlandırılmış yollar ve yapılandırılabilir Wake-on-LAN."
+    }
+  ],
+  "verified": [
+    "Ayrı host ve worker süreçleriyle sahte solver çalıştırma, paket yükleme ve doğrulanmış indirme geçti.",
+    "İş son tarihi, belirsiz durumda karantina, gerekçeli kapatma ve değişmez iş belgesi kontrolleri geçti.",
+    "CST bağdaştırıcısının mevcut iş sözleşmesi ve ham arşivi koruması sahte alt süreçle doğrulandı."
+  ],
+  "limits": [
+    "Okul bilgisayarında Python worker kurulumu ve gerçek bağlantı denemesi kullanıcının isteğiyle bu çalışmanın dışında tutuldu; Tailscale zorunlu değildir.",
+    "Wake-on-LAN ağ, BIOS ve gerekiyorsa erişilebilir bir yerel aktarıcı gerektirir.",
+    "Sahte solver testi gerçek CST veya okul ağı testi sayılmaz.",
+    "Büyük sonuç yüklemesi doğrudan HTTP(S) erişimi gerektirir; kurumsal proxy desteği ve ayrı kullanıcı/worker yetki rolleri henüz yoktur."
+  ],
+  "next": "Okul bilgisayarında Python worker, yerel kaynak sürümü ve izin verilen çalıştırıcı yapılandırılır. Worker ana bilgisayardaki erişilebilir host adresine bağlanır. Kurulum örnekleri ve komutlar depoda hazırdır; şimdilik okul bilgisayarında işlem yapılması gerekmiyor."
+}

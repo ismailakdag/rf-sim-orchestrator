@@ -1,0 +1,11 @@
+{
+  "project": "rf-sim-orchestrator",
+  "design_reference": "https://www.ismailakdag.com/",
+  "generator_sha256": "e1bc8c0044fe850d91ac593a45f138c98d704e4007629f8777a8fa05357c98c9",
+  "files_sha256": {
+    "index.html": "0c92ba44248e81cbd29b050b6758467e6683ebc552b08f239528cc2c4b93a4ab",
+    "inter-OFL.txt": "5dd548d31a85f756e01d63e00d7faf1e324103ed3e9102fcbbabf2cc2db6dd39",
+    "project.json": "4592f07e85015f03baacbd36d877311ea50cc5511db1540eb930fd2e272f2d44",
+    "source-serif-OFL.txt": "0fd8b796c1c6220a559a5682cfd00d1c8488b428369f7cb70deb671888cef85f"
+  }
+}
