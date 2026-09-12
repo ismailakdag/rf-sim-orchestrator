@@ -71,6 +71,38 @@ class LeaseSafetyTests(unittest.TestCase):
             self.assertIsNone(store.lease("school-pc", ["mock-v1"]))
             self.assertIsNotNone(store.lease("different-pc", ["mock-v1"]))
 
+    def test_operator_can_resolve_expired_uncertainty_and_release_worker(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Store(Path(temp), 60, {"mock-v1"}, 1_000_000, 2_000_000)
+            store.submit(job("expired-uncertain", future(seconds=0.1)))
+            store.submit(job("replacement"))
+            self.assertIsNotNone(store.lease("school-pc", ["mock-v1"]))
+            time.sleep(0.15)
+            self.assertEqual(store.status("expired-uncertain")["state"], "needs_attention")
+            with self.assertRaisesRegex(ValidationError, "deadline"):
+                store.manual_requeue("expired-uncertain", "no solver remains")
+
+            resolved = store.manual_resolve(
+                "expired-uncertain",
+                "School PC was inspected; no solver or descendant process remains active.",
+            )
+            self.assertEqual(resolved["state"], "resolved")
+            status = store.status("expired-uncertain")
+            self.assertEqual(status["state"], "resolved")
+            self.assertEqual(status["worker_id"], "school-pc")
+            self.assertEqual(status["events"][-1]["event"], "manual_resolution")
+            next_lease = store.lease("school-pc", ["mock-v1"])
+            self.assertEqual(next_lease["job"]["job_id"], "replacement")
+
+    def test_operator_cannot_resolve_an_active_lease(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Store(Path(temp), 60, {"mock-v1"}, 1_000_000, 2_000_000)
+            store.submit(job("active"))
+            store.lease("school-pc", ["mock-v1"])
+            with self.assertRaisesRegex(ValidationError, "needs_attention"):
+                store.manual_resolve("active", "No active solver remains.")
+            self.assertEqual(store.status("active")["state"], "leased")
+
     def test_result_after_deadline_is_not_accepted(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

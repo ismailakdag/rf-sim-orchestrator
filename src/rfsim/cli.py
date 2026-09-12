@@ -72,6 +72,12 @@ def command_requeue(args) -> None:
     print_json(ApiClient(args.url, token_from(args)).json("POST", f"/api/v1/jobs/{args.job_id}/requeue", {"reason": args.reason}))
 
 
+def command_resolve(args) -> None:
+    if not JOB_ID_RE.fullmatch(args.job_id):
+        raise SystemExit("invalid job_id")
+    print_json(ApiClient(args.url, token_from(args)).json("POST", f"/api/v1/jobs/{args.job_id}/resolve", {"reason": args.reason}))
+
+
 def command_worker(args) -> None:
     config = load_config(args.config)
     worker_config = config["worker"]
@@ -134,7 +140,7 @@ def parser() -> argparse.ArgumentParser:
     host.add_argument("--config", required=True)
     host.add_argument("--token")
     host.set_defaults(func=command_host)
-    for name, func in (("submit", command_submit), ("status", command_status), ("requeue", command_requeue), ("results", command_results)):
+    for name, func in (("submit", command_submit), ("status", command_status), ("requeue", command_requeue), ("resolve", command_resolve), ("results", command_results)):
         item = sub.add_parser(name)
         item.add_argument("--url", required=True)
         item.add_argument("--token")
@@ -142,9 +148,10 @@ def parser() -> argparse.ArgumentParser:
             item.add_argument("job")
         elif name == "status":
             item.add_argument("job_id", nargs="?")
-        elif name == "requeue":
+        elif name in {"requeue", "resolve"}:
             item.add_argument("job_id")
-            item.add_argument("--reason", required=True)
+            reason_help = "operator evidence that no solver is active; closes the uncertain job without retry" if name == "resolve" else None
+            item.add_argument("--reason", required=True, help=reason_help)
         else:
             item.add_argument("job_id")
             item.add_argument("--output", required=True)

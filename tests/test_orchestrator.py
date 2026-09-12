@@ -140,6 +140,42 @@ class SubprocessEndToEndTest(unittest.TestCase):
                 self.assertTrue(downloaded["verified"])
                 self.assertGreaterEqual(downloaded["artifact_count"], 7)
                 self.assertTrue(destination.is_file())
+
+                job_file.write_text(json.dumps(job("resolve-e2e")), encoding="utf-8")
+                run_cli("submit", "--url", url, str(job_file))
+
+                def post_json(path, payload):
+                    request = urllib.request.Request(
+                        url + path,
+                        data=json.dumps(payload).encode("utf-8"),
+                        method="POST",
+                        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                    )
+                    with urllib.request.urlopen(request, timeout=2) as response:
+                        return json.load(response)
+
+                lease = post_json("/api/v1/lease", {"worker_id": "resolve-worker", "runners": ["mock-v1"]})["lease"]
+                post_json(
+                    "/api/v1/jobs/resolve-e2e/attention",
+                    {
+                        "worker_id": "resolve-worker",
+                        "lease_token": lease["lease_token"],
+                        "reason": "offline fixture entered an uncertain state",
+                    },
+                )
+                resolved = json.loads(
+                    run_cli(
+                        "resolve",
+                        "--url",
+                        url,
+                        "resolve-e2e",
+                        "--reason",
+                        "Fixture inspected; no process remains active.",
+                    ).stdout
+                )
+                self.assertEqual(resolved["state"], "resolved")
+                resolved_status = json.loads(run_cli("status", "--url", url, "resolve-e2e").stdout)
+                self.assertEqual(resolved_status["state"], "resolved")
             finally:
                 host.terminate()
                 try:

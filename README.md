@@ -12,7 +12,7 @@ Tüm HTTP uçları en az 32 karakterlik aynı Bearer belirteciyle doğrulanır. 
 
 Uzak iş belgesi bir komut, Python yolu veya betik yolu taşıyamaz. Ana bilgisayar yalnız izin verilen çalıştırıcı adlarını kabul eder. İşçi bu adı kendi TOML dosyasındaki sabit betik, sabit Python ve sınırlı parametre şemasıyla eşler. Alt süreç `shell=False` ile başlatılır. Bu sınır, normal iş payload'ının keyfî bir kabuk komutuna dönüşmesini önler. Ana bilgisayarın veya işçinin tamamen ele geçirilmesine karşı güvenlik garantisi değildir; bu makineler ve yerel yapılandırmaları güven sınırındadır.
 
-Bir lease, yani süreli iş sahipliği kaydı, heartbeat denen düzenli yaşam sinyali gelmezse sona erer. Pahalı bir solver'ın uzak bilgisayarda hâlâ çalışıp çalışmadığı bilinemez. Bu nedenle iş `needs_attention` durumuna geçer ve otomatik olarak yeniden çalıştırılmaz. Aynı işçi kimliği, bu belirsizlik çözülene kadar yeni iş alamaz; başka işçiler bağımsız işleri sürdürebilir. Sabit dış çalıştırıcı zaman aşımında yalnız üst Python sürecini öldürmenin CST alt sürecini durdurduğu kanıtlanamayacağı için süreç otomatik sonlandırılmaz, PID ve yerel durum kaydedilir. Operatör eski işçiyi ve yerel arşivi inceledikten sonra açık gerekçeyle `requeue` komutunu kullanabilir. Dağıtık sistemde tam “yalnız bir kez” yürütme garantisi verilemez; uygulama belirsizliği görünür ve kalıcı tutar.
+Bir lease, yani süreli iş sahipliği kaydı, heartbeat denen düzenli yaşam sinyali gelmezse sona erer. Pahalı bir solver'ın uzak bilgisayarda hâlâ çalışıp çalışmadığı bilinemez. Bu nedenle iş `needs_attention` durumuna geçer ve otomatik olarak yeniden çalıştırılmaz. Aynı işçi kimliği, bu belirsizlik çözülene kadar yeni iş alamaz; başka işçiler bağımsız işleri sürdürebilir. Sabit dış çalıştırıcı zaman aşımında yalnız üst Python sürecini öldürmenin CST alt sürecini durdurduğu kanıtlanamayacağı için süreç otomatik sonlandırılmaz; süreç kimliği (PID) ve yerel durum kaydedilir. Operatör eski işçiyi ve yerel arşivi inceledikten sonra işi açık gerekçeyle yeniden kuyruğa alabilir veya terminal `resolved` durumunda kapatabilir. Dağıtık sistemde tam “yalnız bir kez” yürütme garantisi verilemez; uygulama belirsizliği görünür ve kalıcı tutar.
 
 Sonuçlar ZIP64 ile 1 MiB parçalar halinde aktarılır. Ana bilgisayar sıkıştırılmış ve açılmış boyut sınırlarını, mutlak veya üst dizine çıkan yolları, ters eğik çizgileri, sembolik bağlantıları, yinelenen üyeleri ve manifest kapsamını denetler. `manifest.json`, kendisi dışındaki her dosyanın boyutunu ve SHA-256 karmasını içerir. İndirme komutu hem paket karmasını hem de iç dosyaları yeniden doğrular.
 
@@ -68,10 +68,16 @@ Okul bilgisayarında depoyu ve sanal ortamı ayrı bir klasöre kurun. `examples
 
 `examples/job.json` tam bir örnektir. `job_id` değişmez kimliktir; aynı belge tekrar gönderildiğinde işlem idempotenttir. Aynı kimlikle farklı içerik reddedilir. `source.sha256`, çalıştırılacak donmuş kaynak sürümünü bağlar. `deadline_utc` saat dilimli ve gelecekte olmalıdır. Parametrelerin birimleri anahtar adında veya yapılandırılmış değerde açık olmalıdır.
 
-Durumlar `queued`, `leased`, `completed`, `failed`, `expired` ve `needs_attention` değerlerini alır. `completed`, paketin host'a ulaştığını ve dosya bütünlüğü kontrollerinden geçtiğini gösterir; bilimsel geçerlilik, mesh yakınsaması veya fiziksel doğrulama anlamına gelmez. Bunlar `quality/` kayıtlarında ayrı sonuçlardır. Worker hatası `failed` olur; bağlantı veya makine kaybı `needs_attention` olur. Yeniden kuyruğa alma açık bir operatör kararıdır:
+Durumlar `queued`, `leased`, `completed`, `failed`, `expired`, `needs_attention` ve `resolved` değerlerini alır. `completed`, paketin host'a ulaştığını ve dosya bütünlüğü kontrollerinden geçtiğini gösterir; bilimsel geçerlilik, mesh yakınsaması veya fiziksel doğrulama anlamına gelmez. Bunlar `quality/` kayıtlarında ayrı sonuçlardır. Worker hatası `failed` olur; bağlantı, makine veya dış solver durumu belirsizse iş `needs_attention` olur. Yeniden kuyruğa alma açık bir operatör kararıdır:
 
 ```powershell
 rf-sim requeue --url https://HOST:8765 JOB-ID --reason "Okul bilgisayarında CST ve yerel arşiv kontrol edildi; solver çalışmıyor."
+```
+
+İşin değişmez son tarihi geçtiyse aynı iş yeniden kuyruğa alınamaz. Operatör, ilgili bilgisayarda etkin solver kalmadığını doğruladıktan sonra belirsiz kaydı silmeden terminal durumda kapatabilir. Bu işlem sonuçları veya yerel kanıt dosyalarını silmez ve otomatik tekrar başlatmaz; işçiyi yeni bir `job_id` alabilmesi için serbest bırakır:
+
+```powershell
+rf-sim resolve --url https://HOST:8765 JOB-ID --reason "Okul bilgisayarı kontrol edildi; bu işe ait etkin solver veya alt süreç bulunmuyor."
 ```
 
 ## CST 2026 bağdaştırıcısı

@@ -237,6 +237,33 @@ class Store:
             self._event(db, job_id, "manual_requeue", {"reason": reason[:2000], "previous_state": row["state"]})
         return {"job_id": job_id, "state": "queued"}
 
+    def manual_resolve(self, job_id: str, reason: str) -> dict:
+        if not JOB_ID_RE.fullmatch(job_id):
+            raise ValidationError("invalid job_id")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValidationError("resolution reason confirming no active solver is required")
+        reason = reason.strip()[:2000]
+        with self.lock, self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self.sweep_expired(db)
+            row = db.execute("SELECT state,worker_id FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+            if not row:
+                raise KeyError(job_id)
+            if row["state"] != "needs_attention":
+                raise ValidationError("only needs_attention jobs can be manually resolved")
+            now = utc_now()
+            db.execute(
+                "UPDATE jobs SET state='resolved',updated_utc=?,lease_token=NULL,lease_expires_utc=NULL,note=? WHERE job_id=?",
+                (now, f"operator resolved without retry: {reason}", job_id),
+            )
+            self._event(
+                db,
+                job_id,
+                "manual_resolution",
+                {"reason": reason, "previous_state": row["state"], "worker_id": row["worker_id"], "automatic_retry": False},
+            )
+        return {"job_id": job_id, "state": "resolved", "worker_id": row["worker_id"]}
+
 
 class ApiHandler(BaseHTTPRequestHandler):
     server_version = "RFSimHost/0.1"
@@ -333,6 +360,10 @@ class ApiHandler(BaseHTTPRequestHandler):
                 job_id = path.split("/")[-2]
                 body = self.read_json()
                 return self.send_json(200, self.app.store.manual_requeue(job_id, body.get("reason", "operator decision")))
+            if path.endswith("/resolve") and path.startswith("/api/v1/jobs/"):
+                job_id = path.split("/")[-2]
+                body = self.read_json()
+                return self.send_json(200, self.app.store.manual_resolve(job_id, body.get("reason", "")))
             if path.startswith("/api/v1/results/"):
                 job_id = path.removeprefix("/api/v1/results/")
                 length = int(self.headers.get("Content-Length", "-1"))
