@@ -4,6 +4,8 @@ Bu depo, birbirinden bağımsız RF/EM simülasyon işlerini bir ana bilgisayar 
 
 Bu yazılım tek bir CST çözümünü hızlandırmaz. Birden fazla bağımsız koşuyu farklı bilgisayarlarda yürütmeye yarar. Okul bilgisayarlarının adresleri, erişim yetkisi, CST sürümü ve lisans kapasitesi henüz doğrulanmadığı için bu depo canlı okul kurulumu yapmaz ve hiçbir CST oturumu başlatmaz.
 
+Mimariyi, hata durumlarını ve okul kurulumu öncesi karar kapılarını tarayıcıda görmek için [çevrimdışı sunumu](presentation/index.html) açabilirsiniz.
+
 ## Güvenlik ve hata davranışı
 
 Tüm HTTP uçları en az 32 karakterlik aynı Bearer belirteciyle doğrulanır. Düz HTTP, belirteci ağ üzerinde korumaz; gerçek ağda HTTPS kullanılmalıdır. TLS doğrudan host yapılandırmasında veya kurumun HTTPS ters vekilinde sonlandırılabilir. Belirteci Git'e ya da TOML dosyasına yazmayın; `RF_SIM_TOKEN` ortam değişkeninde tutun.
