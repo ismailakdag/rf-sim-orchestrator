@@ -1,0 +1,97 @@
+# Documentation only; this is not an enabled worker configuration. Recompute
+# every hash after any deliberate source or adapter change.
+[worker]
+host_url = "https://HOSTNAME-OR-TAILSCALE-IP:8765"
+worker_id = "SCHOOL-HOSTNAME"
+data_dir = "D:/rf-sim-worker"
+heartbeat_seconds = 30
+poll_seconds = 30
+
+[runners.cst-candidate-local-metal-v2]
+type = "fixed_python"
+python = "C:/Path/To/Python/python.exe"
+script = "E:/rf-sim-orchestrator/adapters/candidate_local_metal_v2.py"
+script_sha256 = "13b354527bacd45badf915d27eef97078af8771a0d7dd604925bd5534022d93c"
+source_sha256 = "f60e7a04631ea7d51379f5cf52243c0fb8a1121ca632ea71a6003b8925dd9226"
+arguments = ["{job_file}", "{run_dir}", "--source-root", "E:/codex-cst-studio/research/tooth-sensor/candidate-local-metal-v2"]
+timeout_seconds = 28800
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.mesh]
+type = "integer"
+min = 16
+max = 96
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.local_step_mm]
+type = "number"
+min = 0.05
+max = 0.5
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.timeout_seconds]
+type = "integer"
+min = 60
+max = 28800
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.accuracy_dB]
+type = "number"
+min = -100
+max = -20
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.number_of_pulse_widths]
+type = "integer"
+min = 20
+max = 200
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.field_monitor_GHz]
+type = "number"
+min = 1.0
+max = 6.0
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.gpu]
+type = "boolean"
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.capture_view]
+type = "boolean"
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.evidence_domain]
+type = "string"
+enum = ["synthetic", "phantom"]
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.params]
+type = "object"
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.params.properties.topology]
+type = "string"
+enum = ["hilbert_split_ring"]
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.params.properties.ring_scale]
+type = "number"
+min = 0.5
+max = 1.5
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.params.properties.sensing_gap_mm]
+type = "number"
+min = 0.1
+max = 2.0
+required = true
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.params.properties.lesion_permittivity]
+type = "number"
+min = 1.0
+max = 100.0
+
+[runners.cst-candidate-local-metal-v2.parameter_schema.params.properties.lesion_conductivity]
+type = "number"
+min = 0.0
+max = 10.0

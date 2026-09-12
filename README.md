@@ -1,0 +1,97 @@
+# RF Sim Orchestrator
+
+Bu depo, birbirinden bağımsız RF/EM simülasyon işlerini bir ana bilgisayar ile dışarı doğru bağlantı kuran Windows işçileri arasında dağıtmak için küçük ve denetlenebilir bir altyapıdır. Ana bilgisayar değişmez işleri SQLite kuyruğunda saklar. Her işçi aynı anda yalnız bir iş kiralar, yerel izin listesindeki bir çalıştırıcıyı çağırır ve tam sonuç paketini geri yükler.
+
+Bu yazılım tek bir CST çözümünü hızlandırmaz. Birden fazla bağımsız koşuyu farklı bilgisayarlarda yürütmeye yarar. Okul bilgisayarlarının adresleri, erişim yetkisi, CST sürümü ve lisans kapasitesi henüz doğrulanmadığı için bu depo canlı okul kurulumu yapmaz ve hiçbir CST oturumu başlatmaz.
+
+## Güvenlik ve hata davranışı
+
+Tüm HTTP uçları en az 32 karakterlik aynı Bearer belirteciyle doğrulanır. Düz HTTP, belirteci ağ üzerinde korumaz; gerçek ağda HTTPS kullanılmalıdır. TLS doğrudan host yapılandırmasında veya kurumun HTTPS ters vekilinde sonlandırılabilir. Belirteci Git'e ya da TOML dosyasına yazmayın; `RF_SIM_TOKEN` ortam değişkeninde tutun.
+
+Uzak iş belgesi bir komut, Python yolu veya betik yolu taşıyamaz. Ana bilgisayar yalnız izin verilen çalıştırıcı adlarını kabul eder. İşçi bu adı kendi TOML dosyasındaki sabit betik, sabit Python ve sınırlı parametre şemasıyla eşler. Alt süreç `shell=False` ile başlatılır. Bu sınır, normal iş payload'ının keyfî bir kabuk komutuna dönüşmesini önler. Ana bilgisayarın veya işçinin tamamen ele geçirilmesine karşı güvenlik garantisi değildir; bu makineler ve yerel yapılandırmaları güven sınırındadır.
+
+Bir lease, yani süreli iş sahipliği kaydı, heartbeat denen düzenli yaşam sinyali gelmezse sona erer. Pahalı bir solver'ın uzak bilgisayarda hâlâ çalışıp çalışmadığı bilinemez. Bu nedenle iş `needs_attention` durumuna geçer ve otomatik olarak yeniden çalıştırılmaz. Operatör eski işçiyi ve yerel arşivi inceledikten sonra açık gerekçeyle `requeue` komutunu kullanabilir. Dağıtık sistemde tam “yalnız bir kez” yürütme garantisi verilemez; uygulama belirsizliği görünür ve kalıcı tutar.
+
+Sonuçlar ZIP64 ile 1 MiB parçalar halinde aktarılır. Ana bilgisayar sıkıştırılmış ve açılmış boyut sınırlarını, mutlak veya üst dizine çıkan yolları, ters eğik çizgileri, sembolik bağlantıları, yinelenen üyeleri ve manifest kapsamını denetler. `manifest.json`, kendisi dışındaki her dosyanın boyutunu ve SHA-256 karmasını içerir. İndirme komutu hem paket karmasını hem de iç dosyaları yeniden doğrular.
+
+Tam paket şu alanların her birinde en az bir dosya ister:
+
+| Dizin | Beklenen kanıt |
+|---|---|
+| `model/` | Kaydedilmiş model veya mock model |
+| `source/` | Üretici kaynakları ve üretilmiş VBA |
+| `parameters/` | Birimleri ve kaynağı belirli parametreler |
+| `results/` | Frekans ekseni ile karmaşık S-parametreleri |
+| `mesh/` | Gerçek ağ bilgisi veya açıkça mock kaydı |
+| `logs/` | Çalıştırıcı ve solver yaşam döngüsü |
+| `quality/` | Bütünlük, pasiflik, enerji ve yakınsama kontrolleri |
+
+## Yerel mock gösterimi
+
+Windows PowerShell'de Python 3.11 veya daha yenisiyle:
+
+```powershell
+cd E:\rf-sim-orchestrator
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+$env:RF_SIM_TOKEN = py -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Birinci terminalde ana bilgisayarı başlatın:
+
+```powershell
+.\.venv\Scripts\rf-sim.exe host --config examples\host.toml
+```
+
+İkinci terminalde işi gönderip tek işçi çevrimini çalıştırın:
+
+```powershell
+.\.venv\Scripts\rf-sim.exe submit --url http://127.0.0.1:8765 examples\job.json
+.\.venv\Scripts\rf-sim.exe worker --config examples\worker.toml --once
+.\.venv\Scripts\rf-sim.exe status --url http://127.0.0.1:8765 demo-0001
+.\.venv\Scripts\rf-sim.exe results --url http://127.0.0.1:8765 demo-0001 --output demo-data\downloaded\demo-0001.zip
+```
+
+Mock çalıştırıcı CST'ye bağlanmaz. Yine de model, VBA, parametre, uzun biçimli karmaşık S-parametresi, ağ, günlük ve ayrı kalite kayıtlarını üretir; böylece taşıma ve doğrulama hattı uçtan uca sınanır.
+
+## Ana bilgisayar ve okul işçisi kurulumu
+
+Ana bilgisayarda `examples/host.toml` dosyasını çalışma kopyasına alın; `data_dir`, dinleme adresi, port, izinli çalıştırıcılar ve boyut sınırlarını belirleyin. Gerçek ağda TLS veya güvenilen bir HTTPS ters vekili olmadan `0.0.0.0` üzerinde servis açmayın. Güvenlik duvarında yalnız gerekli ağlardan gelen bağlantıya izin verin.
+
+Okul bilgisayarında depoyu ve sanal ortamı ayrı bir klasöre kurun. `examples/worker.toml` kopyasında ana bilgisayarın erişilebilir HTTPS adresini, benzersiz işçi kimliğini ve yerel veri dizinini yazın. Aynı güçlü belirteci kullanıcı kapsamındaki `RF_SIM_TOKEN` ortam değişkenine koyun. Ardından `python -m rfsim worker --config ... --once` veya kurulu `rf-sim worker` komutuyla önce mock işi doğrulayın. Sürekli çalışma daha sonra Windows Görev Zamanlayıcı'da kullanıcı oturumu ve kurum politikalarıyla uyumlu bir görev olarak kurulabilir.
+
+İşçi yalnız dışarı doğru HTTP(S) isteği gönderdiği için okul bilgisayarında gelen bağlantı açılması gerekmez. Ancak ana bilgisayar URL'sinin okul ağından erişilebilir olması gerekir; Python betikleri NAT'ı kendiliğinden aşmaz. Kurum ağı gerektirirse Python'un standart `urllib` istemcisi `HTTPS_PROXY` ortam değişkenini kullanabilir. Proxy adresi ve kimlik bilgileri kurum yöneticisinden alınmalı; bu depo proxy kurmaz veya gerçek okul bağlantısını denemez.
+
+## İş belgesi ve durumlar
+
+`examples/job.json` tam bir örnektir. `job_id` değişmez kimliktir; aynı belge tekrar gönderildiğinde işlem idempotenttir. Aynı kimlikle farklı içerik reddedilir. `source.sha256`, çalıştırılacak donmuş kaynak sürümünü bağlar. `deadline_utc` saat dilimli ve gelecekte olmalıdır. Parametrelerin birimleri anahtar adında veya yapılandırılmış değerde açık olmalıdır.
+
+Durumlar `queued`, `leased`, `completed`, `failed`, `expired` ve `needs_attention` değerlerini alır. Worker hatası `failed` olur; bağlantı veya makine kaybı `needs_attention` olur. Yeniden kuyruğa alma açık bir operatör kararıdır:
+
+```powershell
+rf-sim requeue --url https://HOST:8765 JOB-ID --reason "Okul bilgisayarında CST ve yerel arşiv kontrol edildi; solver çalışmıyor."
+```
+
+## CST 2026 bağdaştırıcısı
+
+`adapters/candidate_local_metal_v2.py`, mevcut `candidate-local-metal-v2/night_case.py` akışına isteğe bağlı bir köprüdür. Örnek yapılandırma `examples/cst-candidate-local-metal-v2.toml.example` içindedir. Kaynak kanıtı olarak depoya kopya alınmamış, yalnız mevcut donmuş kaynak manifestinin SHA-256 değeri ve yerel yol kullanılmıştır.
+
+Bağdaştırıcı ancak okul bilgisayarında CST 2026, resmi Python kitaplıkları, kaynak dosyaları ve lisans erişimi ayrı ayrı doğrulandıktan sonra etkinleştirilmelidir. Yerel `script_sha256` değeri kurulum sırasında hesaplanmalıdır. Çalıştırıcı kaynak manifestini ve içindeki her kaynak karmasını yeniden doğrular, legacy iş belgesini yerel olarak üretir, `night_case.py` betiğini sabit komutla çağırır ve doğrulanmış arşivi ortak paket düzenine taşır. Bu depodaki geliştirme ve testler CST'ye bağlanmamış ve solver başlatmamıştır.
+
+Bağdaştırıcı örneğindeki parametre sınırları kampanya öncesi mevcut `night_case.py` sözleşmesine göre genişletilmelidir. Eksik veya fazla parametre kapalı güvenli biçimde reddedilir. Yeni bir kaynak sürümü ya da betik değişikliği yeni karmalar ve inceleme gerektirir.
+
+## Wake-on-LAN
+
+```powershell
+rf-sim wol --mac 00-11-22-33-44-55 --broadcast 192.168.1.255 --port 9
+```
+
+Komut MAC adresini, IPv4 broadcast adresini ve portu doğrulayıp tek bir magic packet yollar. Uzaktan açılma garantisi vermez. BIOS/UEFI ve ağ kartında Wake-on-LAN etkin olmalı; bilgisayarın güç ve ağ durumu desteklemeli; paket aynı yayın alanından ya da önceden yapılandırılmış, erişilebilir bir relay üzerinden gönderilmelidir.
+
+## Geliştirme ve test
+
+```powershell
+py -3.11 -m unittest discover -s tests -v
+```
+
+Test paketi doğrulama, yol geçişi reddi, lease süresi sonunda otomatik tekrar yapılmaması ve gerçek host/worker alt süreçleriyle mock uçtan uca aktarımı kapsar.

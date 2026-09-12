@@ -1,0 +1,11 @@
+[worker]
+host_url = "http://127.0.0.1:8765"
+worker_id = "school-pc-demo"
+data_dir = "demo-data/worker"
+heartbeat_seconds = 2
+poll_seconds = 5
+
+[runners.mock-v1]
+type = "mock"
+max_mock_delay_seconds = 5
+

@@ -1,0 +1,14 @@
+[host]
+bind = "127.0.0.1"
+port = 8765
+data_dir = "demo-data/host"
+lease_seconds = 120
+allowed_runners = ["mock-v1"]
+max_result_bytes = 53687091200
+max_uncompressed_bytes = 107374182400
+
+# For a network outside an authenticated overlay such as Tailscale, configure
+# both tls_cert and tls_key or put the service behind an HTTPS reverse proxy.
+# tls_cert = "C:/secure/server.crt"
+# tls_key = "C:/secure/server.key"
+
