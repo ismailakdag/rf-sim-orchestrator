@@ -111,7 +111,7 @@ class Store:
         with self.lock, self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             self.sweep_expired(db)
-            active = db.execute("SELECT job_id FROM jobs WHERE state='leased' AND worker_id=?", (worker_id,)).fetchone()
+            active = db.execute("SELECT job_id FROM jobs WHERE state IN ('leased','needs_attention') AND worker_id=?", (worker_id,)).fetchone()
             if active:
                 return None
             rows = db.execute("SELECT * FROM jobs WHERE state='queued' ORDER BY json_extract(document,'$.priority') DESC, submitted_utc").fetchall()
@@ -168,6 +168,25 @@ class Store:
             self._event(db, job_id, "worker_failed", {"worker_id": worker_id, "reason": reason[:2000]})
             return {"job_id": job_id, "state": "failed"}
 
+    def attention(self, job_id: str, worker_id: str, token: str, reason: str) -> dict:
+        if not JOB_ID_RE.fullmatch(job_id):
+            raise ValidationError("invalid job_id")
+        with self.lock, self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self.sweep_expired(db)
+            row = db.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+            if not row:
+                raise KeyError(job_id)
+            if row["state"] == "needs_attention" and row["worker_id"] == worker_id:
+                return {"job_id": job_id, "state": "needs_attention"}
+            if row["state"] != "leased" or row["worker_id"] != worker_id or not secure_compare(token, row["lease_token"]):
+                raise PermissionError("invalid active lease")
+            now = utc_now()
+            note = f"worker reported uncertain execution state: {reason}"[:2000]
+            db.execute("UPDATE jobs SET state='needs_attention',updated_utc=?,lease_token=NULL,lease_expires_utc=NULL,note=? WHERE job_id=?", (now, note, job_id))
+            self._event(db, job_id, "worker_needs_attention", {"worker_id": worker_id, "reason": reason[:2000], "automatic_retry": False})
+            return {"job_id": job_id, "state": "needs_attention"}
+
     def accept_result(self, job_id: str, worker_id: str, token: str, source: Path, claimed_sha256: str) -> dict:
         if not JOB_ID_RE.fullmatch(job_id):
             raise ValidationError("invalid job_id")
@@ -188,8 +207,10 @@ class Store:
             manifest = verified["manifest"]
             if manifest.get("source") != submitted_job["source"] or manifest.get("deadline_utc") != submitted_job["deadline_utc"]:
                 raise ValidationError("result manifest source or deadline differs from immutable job")
-            if manifest.get("state") != "results_validated":
-                raise ValidationError("result manifest does not claim results_validated")
+            if not secure_compare(manifest.get("job_document_sha256"), row["document_sha256"]):
+                raise ValidationError("result manifest is not bound to the complete immutable job document")
+            if manifest.get("state") != "artifacts_verified":
+                raise ValidationError("result manifest does not claim artifacts_verified")
             target = self.root / "results" / f"{job_id}.zip"
             if target.exists():
                 raise ValidationError("result already exists")
@@ -304,6 +325,10 @@ class ApiHandler(BaseHTTPRequestHandler):
                 job_id = path.split("/")[-2]
                 body = self.read_json()
                 return self.send_json(200, self.app.store.fail(job_id, body.get("worker_id", ""), body.get("lease_token", ""), body.get("reason", "unspecified worker failure")))
+            if path.endswith("/attention") and path.startswith("/api/v1/jobs/"):
+                job_id = path.split("/")[-2]
+                body = self.read_json()
+                return self.send_json(200, self.app.store.attention(job_id, body.get("worker_id", ""), body.get("lease_token", ""), body.get("reason", "uncertain external execution state")))
             if path.endswith("/requeue") and path.startswith("/api/v1/jobs/"):
                 job_id = path.split("/")[-2]
                 body = self.read_json()

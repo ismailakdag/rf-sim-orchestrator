@@ -11,13 +11,18 @@ import time
 import platform
 import math
 import stat
+from datetime import datetime, timezone
 import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
 from typing import Any
 
-from .common import ValidationError, canonical_json, sha256_bytes, sha256_file, utc_now, write_json_atomic
+from .common import ValidationError, canonical_json, parse_utc, safe_member_name, sha256_bytes, sha256_file, utc_now, write_json_atomic
+
+
+class ExecutionUncertain(RuntimeError):
+    """An external process or transport may have completed despite lost control."""
 
 
 class ApiClient:
@@ -62,6 +67,7 @@ class ApiClient:
 def _artifact_manifest(root: Path, job: dict, state: str) -> dict:
     artifacts = []
     resolved_root = root.resolve(strict=True)
+    aliases: set[str] = set()
     for path in sorted(root.rglob("*")):
         attributes = getattr(path.lstat(), "st_file_attributes", 0)
         is_junction = getattr(path, "is_junction", lambda: False)()
@@ -74,7 +80,12 @@ def _artifact_manifest(root: Path, job: dict, state: str) -> dict:
         if not contained:
             raise ValidationError(f"result artifact resolves outside run directory: {path.relative_to(root)}")
         if path.is_file() and path.name != "manifest.json":
-            artifacts.append({"path": path.relative_to(root).as_posix(), "size": path.stat().st_size, "sha256": sha256_file(path)})
+            name = safe_member_name(path.relative_to(root).as_posix())
+            alias = name.casefold()
+            if alias in aliases:
+                raise ValidationError(f"result tree contains a case-insensitive path collision: {name}")
+            aliases.add(alias)
+            artifacts.append({"path": name, "size": path.stat().st_size, "sha256": sha256_file(path)})
     return {
         "schema_version": 1,
         "job_id": job["job_id"],
@@ -88,7 +99,7 @@ def _artifact_manifest(root: Path, job: dict, state: str) -> dict:
     }
 
 
-def package_result(run_dir: Path, job: dict, state: str = "results_validated") -> Path:
+def package_result(run_dir: Path, job: dict, state: str = "artifacts_verified") -> Path:
     write_json_atomic(run_dir / "manifest.json", _artifact_manifest(run_dir, job, state))
     target = run_dir.parent / f"{job['job_id']}.zip"
     temp = target.with_suffix(".zip.tmp")
@@ -184,11 +195,24 @@ def run_fixed_python(job: dict, run_dir: Path, config: dict) -> None:
     # Command and placeholders come only from local configuration. The remote job cannot add flags or a shell command.
     replacements = {"{job_file}": str(job_path), "{run_dir}": str(run_dir)}
     args = [replacements.get(item, item) for item in config.get("arguments", ["{job_file}", "{run_dir}"])]
-    timeout = int(config.get("timeout_seconds", 28_800))
+    remaining = (parse_utc(job["deadline_utc"]) - datetime.now(timezone.utc)).total_seconds()
+    timeout = min(float(config.get("timeout_seconds", 28_800)), remaining)
+    if timeout <= 0:
+        raise ExecutionUncertain("job deadline passed before external process start")
+    runtime_path = run_dir / "logs" / "external-process.json"
+    runtime_path.parent.mkdir(parents=True, exist_ok=True)
+    started_utc = utc_now()
     with (run_dir / "adapter.stdout.log").open("wb") as output:
-        completed = subprocess.run([str(python), str(script), *args], stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, timeout=timeout, shell=False)
-    if completed.returncode:
-        raise RuntimeError(f"configured runner exited with code {completed.returncode}")
+        process = subprocess.Popen([str(python), str(script), *args], stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, shell=False)
+        write_json_atomic(runtime_path, {"pid": process.pid, "started_utc": started_utc, "timeout_seconds": timeout, "state": "running"})
+        try:
+            return_code = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            write_json_atomic(runtime_path, {"pid": process.pid, "started_utc": started_utc, "timeout_seconds": timeout, "state": "timeout_process_state_unknown", "automatic_termination": False})
+            raise ExecutionUncertain(f"fixed runner exceeded {timeout:.1f} s; PID {process.pid} and descendants were not terminated automatically") from exc
+    write_json_atomic(runtime_path, {"pid": process.pid, "finished_utc": utc_now(), "timeout_seconds": timeout, "state": "exited", "return_code": return_code})
+    if return_code:
+        raise ExecutionUncertain(f"configured runner exited with code {return_code}; descendant solver state is unknown")
 
 
 RUNNER_TYPES = {"mock": run_mock, "fixed_python": run_fixed_python}
@@ -233,7 +257,7 @@ class Worker:
                 raise ValidationError(f"unknown locally configured runner type: {runner_type}")
             RUNNER_TYPES[runner_type](job, run_dir, runner_config)
             if heartbeat_error:
-                raise RuntimeError("heartbeat failed while runner was active; result retained locally without upload")
+                raise ExecutionUncertain("heartbeat failed while runner was active; result retained locally without upload")
             write_json_atomic(run_dir / "logs" / "orchestrator-runtime.json", {
                 "worker_id": self.worker_id,
                 "hostname": socket.gethostname(),
@@ -244,11 +268,27 @@ class Worker:
                 "packaged_utc": utc_now(),
             })
             bundle = package_result(run_dir, job)
-            result = self.client.upload(f"/api/v1/results/{job['job_id']}", bundle, self.worker_id, token)
+            try:
+                result = self.client.upload(f"/api/v1/results/{job['job_id']}", bundle, self.worker_id, token)
+            except Exception as exc:
+                raise ExecutionUncertain(f"result upload outcome is unknown; verified bundle retained at {bundle}") from exc
             write_json_atomic(run_dir / "host-acceptance.json", result)
             return result
+        except ExecutionUncertain as exc:
+            try:
+                self.client.json("POST", f"/api/v1/jobs/{job['job_id']}/attention", {"worker_id": self.worker_id, "lease_token": token, "reason": str(exc)})
+            except Exception:
+                pass
+            raise
         except Exception as exc:
             reason = f"{type(exc).__name__}: {exc}"
+            if job["runner"] in self.runners and self.runners[job["runner"]].get("type") == "fixed_python" and (run_dir / "logs" / "external-process.json").is_file():
+                uncertain = f"external runner started and later handling failed; state requires inspection: {reason}"
+                try:
+                    self.client.json("POST", f"/api/v1/jobs/{job['job_id']}/attention", {"worker_id": self.worker_id, "lease_token": token, "reason": uncertain})
+                except Exception:
+                    pass
+                raise ExecutionUncertain(uncertain) from exc
             # If the host is unreachable, preserve local evidence and do not claim a safe retry.
             try:
                 self.client.json("POST", f"/api/v1/jobs/{job['job_id']}/fail", {"worker_id": self.worker_id, "lease_token": token, "reason": reason})

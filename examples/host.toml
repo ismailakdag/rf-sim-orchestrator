@@ -7,8 +7,7 @@ allowed_runners = ["mock-v1"]
 max_result_bytes = 53687091200
 max_uncompressed_bytes = 107374182400
 
-# For a network outside an authenticated overlay such as Tailscale, configure
-# both tls_cert and tls_key or put the service behind an HTTPS reverse proxy.
+# For network access, configure both tls_cert and tls_key or put the service
+# behind an authenticated HTTPS endpoint or reverse proxy.
 # tls_cert = "C:/secure/server.crt"
 # tls_key = "C:/secure/server.key"
-

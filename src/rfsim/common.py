@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+import unicodedata
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -25,6 +26,8 @@ def utc_now() -> str:
 
 
 def parse_utc(value: str) -> datetime:
+    if not isinstance(value, str):
+        raise ValidationError("timestamp must be a string")
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"
     result = datetime.fromisoformat(value)
@@ -66,7 +69,7 @@ def validate_job(document: dict[str, Any], allowed_runners: set[str] | None = No
     missing = required - set(document)
     if missing:
         raise ValidationError(f"missing job fields: {sorted(missing)}")
-    if document["schema_version"] != 1:
+    if type(document["schema_version"]) is not int or document["schema_version"] != 1:
         raise ValidationError("schema_version must be 1")
     for key in ("job_id", "study_id", "runner"):
         if not isinstance(document[key], str) or not JOB_ID_RE.fullmatch(document[key]):
@@ -88,14 +91,22 @@ def validate_job(document: dict[str, Any], allowed_runners: set[str] | None = No
     if deadline <= datetime.now(timezone.utc):
         raise ValidationError("deadline_utc is in the past")
     priority = document.get("priority", 0)
-    if not isinstance(priority, int) or not -100 <= priority <= 100:
+    if type(priority) is not int or not -100 <= priority <= 100:
         raise ValidationError("priority must be an integer from -100 to 100")
+    if not isinstance(document.get("metadata", {}), dict):
+        raise ValidationError("metadata must be an object")
     return {**document, "priority": priority, "metadata": document.get("metadata", {})}
 
 
 def safe_member_name(name: str) -> str:
-    if "\\" in name or "\x00" in name:
+    if not isinstance(name, str) or "\\" in name or "\x00" in name:
         raise ValidationError(f"unsafe archive path: {name!r}")
+    if name != unicodedata.normalize("NFC", name) or "//" in name:
+        raise ValidationError(f"non-canonical archive path: {name!r}")
+    raw_parts = name.rstrip("/").split("/")
+    reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+    if any(not part or part in (".", "..") or ":" in part or part.endswith((".", " ")) or part.split(".", 1)[0].upper() in reserved for part in raw_parts):
+        raise ValidationError(f"unsafe archive path segment: {name!r}")
     path = PurePosixPath(name)
     if path.is_absolute() or not path.parts or any(part in ("", ".", "..") for part in path.parts):
         raise ValidationError(f"unsafe archive path: {name!r}")
@@ -111,11 +122,14 @@ def validate_result_zip(path: Path, expected_job_id: str, max_uncompressed: int)
             raise ValidationError("result archive is empty or has too many entries")
         total = 0
         names: set[str] = set()
+        aliases: set[str] = set()
         for info in infos:
             name = safe_member_name(info.filename)
-            if name in names:
+            alias = unicodedata.normalize("NFC", name).casefold()
+            if name in names or alias in aliases:
                 raise ValidationError(f"duplicate archive member: {name}")
             names.add(name)
+            aliases.add(alias)
             total += info.file_size
             if total > max_uncompressed:
                 raise ValidationError("uncompressed result exceeds configured limit")
@@ -129,10 +143,18 @@ def validate_result_zip(path: Path, expected_job_id: str, max_uncompressed: int)
         for prefix in REQUIRED_RESULT_PREFIXES:
             if not any(name.startswith(prefix) and not name.endswith("/") for name in names):
                 raise ValidationError(f"result archive has no file under {prefix}")
-        manifest = json.loads(archive.read("manifest.json"))
+        manifest_info = archive.getinfo("manifest.json")
+        manifest_limit = 4 * 1024 * 1024
+        if manifest_info.file_size > manifest_limit:
+            raise ValidationError("result manifest exceeds 4 MiB limit")
+        with archive.open(manifest_info) as manifest_stream:
+            manifest_bytes = manifest_stream.read(manifest_limit + 1)
+        if len(manifest_bytes) > manifest_limit:
+            raise ValidationError("result manifest exceeds 4 MiB limit")
+        manifest = json.loads(manifest_bytes)
         if manifest.get("job_id") != expected_job_id:
             raise ValidationError("result manifest job_id mismatch")
-        if manifest.get("schema_version") != 1:
+        if type(manifest.get("schema_version")) is not int or manifest.get("schema_version") != 1:
             raise ValidationError("result manifest schema_version must be 1")
         listed = manifest.get("artifacts")
         if not isinstance(listed, list):
@@ -144,7 +166,7 @@ def validate_result_zip(path: Path, expected_job_id: str, max_uncompressed: int)
             name = safe_member_name(item["path"])
             if name == "manifest.json" or name not in names or name in listed_paths:
                 raise ValidationError(f"invalid artifact listing: {name}")
-            if not isinstance(item["size"], int) or item["size"] < 0 or not SHA256_RE.fullmatch(str(item["sha256"])):
+            if type(item["size"]) is not int or item["size"] < 0 or not SHA256_RE.fullmatch(str(item["sha256"])):
                 raise ValidationError(f"invalid artifact metadata: {name}")
             digest = hashlib.sha256()
             observed_size = 0

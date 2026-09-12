@@ -7,12 +7,17 @@ the local worker configuration. It does not connect to CST during import.
 from __future__ import annotations
 
 import argparse
+import csv
+import gzip
 import hashlib
 import json
+import math
+import os
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+import unicodedata
+from pathlib import Path, PurePosixPath
 
 
 def sha256(path: Path) -> str:
@@ -29,11 +34,79 @@ def exclusive_copy(source: Path, target: Path) -> None:
         shutil.copyfileobj(reader, writer, 1024 * 1024)
 
 
-def exclusive_move(source: Path, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        raise FileExistsError(target)
-    shutil.move(str(source), str(target))
+def portable_relative(name: str, label: str) -> PurePosixPath:
+    if not isinstance(name, str) or "\\" in name or "\x00" in name or "//" in name or name != unicodedata.normalize("NFC", name):
+        raise RuntimeError(f"unsafe {label} path: {name!r}")
+    relative = PurePosixPath(name)
+    reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+    if relative.is_absolute() or not relative.parts or any(part in ("", ".", "..") or ":" in part or part.endswith((".", " ")) or part.split(".", 1)[0].upper() in reserved for part in relative.parts):
+        raise RuntimeError(f"unsafe {label} path: {name!r}")
+    return relative
+
+
+def safe_source(source_root: Path, name: str) -> Path:
+    relative = portable_relative(name, "source manifest entry")
+    candidate = (source_root / Path(*relative.parts)).resolve(strict=True)
+    if Path(os.path.commonpath((str(source_root), str(candidate)))) != source_root:
+        raise RuntimeError(f"source manifest entry escapes source root: {name!r}")
+    if not candidate.is_file() or candidate.is_symlink():
+        raise RuntimeError(f"source manifest entry is not a regular file: {name!r}")
+    return candidate
+
+
+def safe_retained_file(root: Path, name: str) -> Path:
+    relative = portable_relative(name, "verified artifact")
+    candidate = (root / Path(*relative.parts)).resolve(strict=True)
+    if Path(os.path.commonpath((str(root), str(candidate)))) != root or not candidate.is_file() or candidate.is_symlink():
+        raise RuntimeError(f"verified artifact escapes archive or is not a regular file: {name!r}")
+    return candidate
+
+
+def validate_completed_archive(raw_archive: Path, raw_work: Path, job: dict, source_manifest: dict) -> dict:
+    record = json.loads((raw_archive / "record.json").read_text(encoding="utf-8"))
+    verified = json.loads((raw_archive / "verified.json").read_text(encoding="utf-8"))
+    if record.get("run_id") != job["job_id"] or record.get("results_validated") is not True:
+        raise RuntimeError("CST record does not identify a validated result for this job")
+    if record.get("project_closed") is not True:
+        raise RuntimeError("CST record does not prove that the project was closed")
+    if verified.get("job_id") != job["job_id"] or verified.get("results_validated") is not True:
+        raise RuntimeError("verified.json does not identify a validated result for this job")
+    source_hashes = record.get("source_hashes", {})
+    for name, observed in source_hashes.items():
+        if name not in source_manifest or observed != source_manifest[name]:
+            raise RuntimeError(f"record source hash is not pinned by source manifest: {name}")
+    if not source_hashes:
+        raise RuntimeError("record has no source hash evidence")
+    files = verified.get("files")
+    if not isinstance(files, dict) or not files:
+        raise RuntimeError("verified.json has no retained-file manifest")
+    for name, info in files.items():
+        path = safe_retained_file(raw_archive, name)
+        expected_size = info.get("bytes")
+        if path.stat().st_size != expected_size or sha256(path) != info.get("sha256"):
+            raise RuntimeError(f"retained CST artifact hash or size mismatch: {name}")
+    expected_header = ["frequency_GHz"] + [f"{name}_{part}" for name in ("S1,1", "S1,2", "S2,1", "S2,2") for part in ("real", "imag")]
+    row_count = 0
+    previous_frequency = None
+    with gzip.open(raw_archive / "sparameters.csv.gz", "rt", newline="", encoding="utf-8") as handle:
+        reader = csv.reader(handle)
+        if next(reader, None) != expected_header:
+            raise RuntimeError("complex S-parameter CSV header is not the pinned four-curve schema")
+        for row in reader:
+            if len(row) != len(expected_header):
+                raise RuntimeError("complex S-parameter CSV row width is invalid")
+            values = [float(value) for value in row]
+            if not all(math.isfinite(value) for value in values):
+                raise RuntimeError("complex S-parameter CSV contains non-finite data")
+            if previous_frequency is not None and values[0] <= previous_frequency:
+                raise RuntimeError("complex S-parameter frequency axis is not strictly increasing")
+            previous_frequency = values[0]
+            row_count += 1
+    if row_count == 0 or verified.get("samples") != row_count:
+        raise RuntimeError("complex S-parameter sample count is empty or differs from verified.json")
+    if not (raw_work / "model.cst").is_file():
+        raise RuntimeError("saved CST model is missing from raw work directory")
+    return {"record": record, "verified": verified, "sparameter_rows": row_count}
 
 
 def main() -> int:
@@ -44,17 +117,22 @@ def main() -> int:
     args = parser.parse_args()
     job = json.loads(args.job_file.read_text(encoding="utf-8"))
     run_dir = args.run_dir.resolve()
-    source_root = args.source_root.resolve()
+    source_root = args.source_root.resolve(strict=True)
     manifest_path = source_root / "source-manifest.json"
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        raise RuntimeError("source-manifest.json must be a regular local file")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if sha256(manifest_path) != job["source"]["sha256"]:
         raise RuntimeError("frozen source-manifest hash differs from submitted job")
+    verified_sources = {}
     for name, expected in manifest.items():
-        if sha256(source_root / name) != expected:
+        source_file = safe_source(source_root, name)
+        if sha256(source_file) != expected:
             raise RuntimeError(f"frozen source file hash mismatch: {name}")
+        verified_sources[name] = source_file
 
-    raw_archive = run_dir / "raw-archive"
-    raw_work = run_dir / "raw-work"
+    raw_archive = run_dir / "source" / "cst-archive"
+    raw_work = run_dir / "model" / "cst-work"
     legacy = dict(job["parameters"])
     legacy.update({"id": job["job_id"], "deadline_utc": job["deadline_utc"], "archive": str(raw_archive), "work": str(raw_work)})
     legacy_job = run_dir / "legacy-job.json"
@@ -63,9 +141,9 @@ def main() -> int:
     if completed.returncode:
         return completed.returncode
 
-    mapping = {
-        "model/model.cst": raw_work / "model.cst",
-        "source/model.vba": raw_archive / "model.vba",
+    validation = validate_completed_archive(raw_archive, raw_work, job, manifest)
+
+    compact_mapping = {
         "parameters/job.json": args.job_file,
         "parameters/record.json": raw_archive / "record.json",
         "results/sparameters.csv.gz": raw_archive / "sparameters.csv.gz",
@@ -73,33 +151,32 @@ def main() -> int:
         "logs/lifecycle.jsonl": raw_archive / "lifecycle.jsonl",
         "quality/verified.json": raw_archive / "verified.json",
     }
-    optional = {
-        "mesh/mesh-grid.bin": raw_archive / "mesh-grid.bin",
+    optional_compact = {
         "logs/summary.md": raw_archive / "summary.md",
-        "model/model.png": raw_archive / "model.png",
     }
-    missing = [str(source) for source in mapping.values() if not source.is_file()]
+    missing = [str(source) for source in compact_mapping.values() if not source.is_file()]
     if missing:
         raise RuntimeError(f"validated CST run is missing canonical artifacts: {missing}")
-    for name, source in {**mapping, **{k: v for k, v in optional.items() if v.is_file()}}.items():
-        exclusive_move(source, run_dir / name)
-    for name in manifest:
-        archived_source = raw_archive / name
-        if archived_source.is_file():
-            exclusive_move(archived_source, run_dir / "source" / name)
-        else:
-            exclusive_copy(source_root / name, run_dir / "source" / name)
-    # Retain every unrecognized worker artifact without duplicating large files.
-    if raw_archive.exists() and any(raw_archive.iterdir()):
-        exclusive_move(raw_archive, run_dir / "logs" / "raw-archive-extra")
-    elif raw_archive.exists():
-        raw_archive.rmdir()
-    if raw_work.exists() and any(raw_work.iterdir()):
-        exclusive_move(raw_work, run_dir / "logs" / "raw-work-extra")
-    elif raw_work.exists():
-        raw_work.rmdir()
-    if legacy_job.exists():
-        exclusive_move(legacy_job, run_dir / "logs" / "legacy-job.json")
+    for name, source in {**compact_mapping, **{k: v for k, v in optional_compact.items() if v.is_file()}}.items():
+        exclusive_copy(source, run_dir / name)
+    exclusive_copy(manifest_path, run_dir / "source" / "source-manifest.json")
+    for name, source_path in verified_sources.items():
+        exclusive_copy(source_path, run_dir / "source" / "pinned-source" / name)
+    transport = {
+        "raw_archive": str(raw_archive),
+        "raw_work": str(raw_work),
+        "raw_archive_preserved": True,
+        "raw_work_preserved": True,
+        "compact_copies": {name: str(source.relative_to(run_dir)) for name, source in compact_mapping.items()},
+        "large_artifacts": {
+            "model": {"path": str((raw_work / "model.cst").relative_to(run_dir)), "size": (raw_work / "model.cst").stat().st_size, "sha256": sha256(raw_work / "model.cst")},
+            "mesh_grid": ({"path": str((raw_archive / "mesh-grid.bin").relative_to(run_dir)), "size": (raw_archive / "mesh-grid.bin").stat().st_size, "sha256": sha256(raw_archive / "mesh-grid.bin")} if (raw_archive / "mesh-grid.bin").is_file() else None),
+        },
+        "verified_source_files": {name: {"path": str(path), "sha256": manifest[name]} for name, path in verified_sources.items()},
+        "adapter_validation": {"results_validated": True, "project_closed": True, "sparameter_rows": validation["sparameter_rows"]},
+    }
+    (run_dir / "parameters" / "transport-mapping.json").write_text(json.dumps(transport, ensure_ascii=False, indent=2), encoding="utf-8")
+    exclusive_copy(legacy_job, run_dir / "logs" / "legacy-job.json")
     return 0
 
 
