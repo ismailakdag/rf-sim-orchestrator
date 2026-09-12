@@ -115,8 +115,12 @@ def main() -> int:
     parser.add_argument("run_dir", type=Path)
     parser.add_argument("--source-root", type=Path, required=True)
     args = parser.parse_args()
-    job = json.loads(args.job_file.read_text(encoding="utf-8"))
-    run_dir = args.run_dir.resolve()
+    # Resolve both sides before recording relative paths: Windows may supply a
+    # short (8.3) TEMP path while resolve() expands the run directory's spelling.
+    job_file = args.job_file.resolve(strict=True)
+    run_dir = args.run_dir.resolve(strict=True)
+    job_file.relative_to(run_dir)
+    job = json.loads(job_file.read_text(encoding="utf-8"))
     source_root = args.source_root.resolve(strict=True)
     manifest_path = source_root / "source-manifest.json"
     if not manifest_path.is_file() or manifest_path.is_symlink():
@@ -144,7 +148,7 @@ def main() -> int:
     validation = validate_completed_archive(raw_archive, raw_work, job, manifest)
 
     compact_mapping = {
-        "parameters/job.json": args.job_file,
+        "parameters/job.json": job_file,
         "parameters/record.json": raw_archive / "record.json",
         "results/sparameters.csv.gz": raw_archive / "sparameters.csv.gz",
         "mesh/mesh-cells.txt": raw_archive / "mesh-cells.txt",
