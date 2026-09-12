@@ -1,5 +1,5 @@
 * text=auto eol=lf
+presentation/** -text
 *.zip binary
 *.cst binary
 *.bin binary
-
