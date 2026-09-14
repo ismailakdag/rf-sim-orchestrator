@@ -125,6 +125,7 @@ script_sha256 = "$adapterHash"
 source_sha256 = "$sourceHash"
 cst_python_libraries = "$(TomlValue $cstLibrariesToml)"
 expected_cst_major = 2025
+handle_cst_abort_dialog = true
 timeout_seconds = $supervisorTimeoutSeconds
 arguments = ["{job_file}", "{run_dir}", "--source-root", "$(TomlValue $sourceToml)", "--case-catalog", "case-catalog.json", "--compact"]
 

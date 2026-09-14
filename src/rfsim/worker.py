@@ -279,10 +279,29 @@ def run_fixed_python(job: dict, run_dir: Path, config: dict) -> None:
     if expected_cst_major := config.get("expected_cst_major"):
         child_env["CST_EXPECTED_VERSION"] = str(int(expected_cst_major))
     with (run_dir / "adapter.stdout.log").open("wb") as output:
+        guard = None
+        if config.get("handle_cst_abort_dialog", False):
+            from .cst_abort_guard import AbortGuard
+            guard = AbortGuard(run_dir)
         process = subprocess.Popen([str(python), str(script), *args], stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, shell=False, env=child_env)
+        expires = time.monotonic() + timeout
         write_json_atomic(runtime_path, {"pid": process.pid, "started_utc": started_utc, "timeout_seconds": timeout, "state": "running"})
         try:
-            return_code = process.wait(timeout=timeout)
+            while True:
+                if guard is not None:
+                    try:
+                        guard.tick()
+                    except Exception as exc:
+                        write_json_atomic(run_dir / 'logs/abort-guard-error.json', {"utc": utc_now(), "error": repr(exc)})
+                left = expires - time.monotonic()
+                if left <= 0:
+                    raise subprocess.TimeoutExpired(process.args, timeout)
+                try:
+                    return_code = process.wait(timeout=min(2, left) if guard is not None else left)
+                    break
+                except subprocess.TimeoutExpired:
+                    if time.monotonic() >= expires:
+                        raise
         except subprocess.TimeoutExpired as exc:
             write_json_atomic(runtime_path, {"pid": process.pid, "started_utc": started_utc, "timeout_seconds": timeout, "state": "timeout_process_state_unknown", "automatic_termination": False, "last_observed_stage": _runner_stage(run_dir)})
             raise ExecutionUncertain(f"fixed runner exceeded {timeout:.1f} s; PID {process.pid} and descendants were not terminated automatically") from exc
