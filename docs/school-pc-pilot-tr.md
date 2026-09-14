@@ -1,5 +1,11 @@
 # Okul bilgisayarı pilotu: CST 2025, CPU ve sınırlı disk
 
+## 14 Eylül 2026 mock sonucu
+
+`OKUL-PC-01`, `school-mock-20260914-01` işini 19:09:40 Türkiye saatinde kiraladı. Dokuz artefakt içeren 2.891 baytlık ZIP paketini 19:09:41'de hosta yükledi. Host paketi `e4bab20e700d67df6daf6331e0bf8f01b7b4a0a7bdf234165b84e13a389c5278` SHA-256 karmasıyla kabul etti; aynı paket hosttan yeniden indirildi ve karma tekrar doğrulandı. Temizlik kapalı kaldı ve CST açılmadı. Makine 29,3 GB boş alan bildirdi.
+
+Bağlantı, iş kiralama, sonuç yükleme ve geri indirme kapısı geçti. İstemcinin yetenek kaydında CST kurulumu görünmediği için gerçek CST 2025 işi henüz gönderilmedi. Kayıt `school-pilot-mock-2026-09-14.json` dosyasındadır.
+
 Bu pilot üç kapıdan oluşur. İlk iki kapı CST açmaz ve hiçbir simülasyon dosyasını silmez.
 
 1. `rf-sim probe --config C:\RFSimWorker\worker.toml` kurulu CST sürümünü, Python API dizinini ve boş alanı okur.

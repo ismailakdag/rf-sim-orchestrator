@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "test_id": "school-mock-20260914-01",
+  "evidence_domain": "mock_transport_only",
+  "worker_id": "OKUL-PC-01",
+  "worker_hostname": "DESKTOP-RTVIKM6",
+  "worker_platform": "Windows-10-10.0.19045-SP0",
+  "worker_python": "3.11.9",
+  "free_bytes_reported": 31473459200,
+  "leased_utc": "2026-09-14T16:09:40.811492Z",
+  "result_verified_utc": "2026-09-14T16:09:41.562533Z",
+  "result_bytes": 2891,
+  "uncompressed_bytes": 4015,
+  "artifact_count": 9,
+  "result_sha256": "e4bab20e700d67df6daf6331e0bf8f01b7b4a0a7bdf234165b84e13a389c5278",
+  "job_document_sha256": "e00e67fe97525792870b72075c1e6d596b1a992d324475679eb3c961e21fd958",
+  "host_download_verified": true,
+  "cleanup_after_upload": false,
+  "cst_launched": false,
+  "cst_installations_reported": [],
+  "interpretation": "The school worker leased the mock job, uploaded its result package, and the host independently downloaded the same SHA-256 package. This validates connectivity, leasing, upload, package integrity and download; it does not validate CST 2025 discovery or simulation."
+}

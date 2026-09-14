@@ -11,7 +11,7 @@
   ],
   "diagram_alt": "Ana bilgisayardaki kuyruktan okul işçisine ve sonuç arşivine akış",
   "diagram_caption": "İşçi ana bilgisayara dışarı doğru bağlanır. Dağıtılanlar bağımsız işlerdir; tek bir solver çözümünü bilgisayarlara bölme iddiası yoktur.",
-  "status": "Host–worker uygulaması tamamlandı; 25 yerel test geçti.",
+  "status": "Okul istemcisinde canlı mock aktarımı ve hosttan doğrulanmış geri indirme geçti; 27 yerel test de geçiyor.",
   "finding_title": "Yalnız skor değil, yeniden üretilebilir sonuç.",
   "finding": "Her işin kimliği ve kaynağı, çalıştırma durumu ve dosya bütünlüğü birlikte izleniyor. Bağlantı kaybından sonra pahalı bir çözüm sessizce tekrar başlatılmıyor.",
   "work": [
@@ -25,19 +25,20 @@
     },
     {
       "title": "Yerel kontrol",
-      "body": "Kimlik doğrulama, izin verilen çalıştırıcılar, sınırlandırılmış yollar ve yapılandırılabilir Wake-on-LAN."
+      "body": "Kurulum GUI’si, çevrimiçi durum, boş disk kapısı, izin verilen çalıştırıcılar ve yapılandırılabilir Wake-on-LAN."
     }
   ],
   "verified": [
-    "Ayrı host ve worker süreçleriyle sahte solver çalıştırma, paket yükleme ve doğrulanmış indirme geçti.",
+    "Okul bilgisayarındaki gerçek istemci mock işi kiraladı; dokuz artefaktlık paket hostta kabul edildi ve aynı SHA-256 karmasıyla geri indirildi.",
     "İş son tarihi, belirsiz durumda karantina, gerekçeli kapatma ve değişmez iş belgesi kontrolleri geçti.",
-    "CST bağdaştırıcısının mevcut iş sözleşmesi ve ham arşivi koruması sahte alt süreçle doğrulandı."
+    "CST bağdaştırıcısının ham arşivi koruyan ve yeniden üretilebilir küçük pakete indiren kipleri sahte alt süreçle doğrulandı.",
+    "Host kabulü ve paket karması doğrulanmadan yerel dosya silinmediği uçtan uca test edildi."
   ],
   "limits": [
-    "Okul bilgisayarında Python worker kurulumu ve gerçek bağlantı denemesi kullanıcının isteğiyle bu çalışmanın dışında tutuldu; Tailscale zorunlu değildir.",
+    "Gerçek CST 2025 CPU pilotu henüz çalıştırılmadı; istemcinin son yetenek kaydında CST kurulumu görünmedi.",
+    "29,5 GB boş alan yalnız kısa pilot için değerlendirilecek; uzun kuyruğun yeterli alanı gerçek tepe tüketimiyle belirlenmeli.",
     "Wake-on-LAN ağ, BIOS ve gerekiyorsa erişilebilir bir yerel aktarıcı gerektirir.",
-    "Sahte solver testi gerçek CST veya okul ağı testi sayılmaz.",
     "Büyük sonuç yüklemesi doğrudan HTTP(S) erişimi gerektirir; kurumsal proxy desteği ve ayrı kullanıcı/worker yetki rolleri henüz yoktur."
   ],
-  "next": "Okul bilgisayarında Python worker, yerel kaynak sürümü ve izin verilen çalıştırıcı yapılandırılır. Worker ana bilgisayardaki erişilebilir host adresine bağlanır. Kurulum örnekleri ve komutlar depoda hazırdır; şimdilik okul bilgisayarında işlem yapılması gerekmiyor."
+  "next": "Okul bilgisayarındaki CST 2025 kurulum ve Python API yolu doğrulanır. Ardından taşınabilir kaynakla GPU kapalı, global 32 ağlı tek CST 2025 pilotu çalıştırılır. Disk tepe tüketimi ölçüldükten ve host paketi doğruladıktan sonra otomatik temizlik açılır."
 }
