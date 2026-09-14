@@ -6,6 +6,8 @@ Bu yazılım tek bir CST çözümünü hızlandırmaz. Birden fazla bağımsız 
 
 Mimariyi, hata durumlarını ve okul kurulumu öncesi karar kapılarını tarayıcıda görmek için [çevrimdışı sunumu](presentation/index.html) açabilirsiniz.
 
+CST 2025/2026 seçimi, boş işçiye uzaktan başlatma, kullanıcı CST projesi yükleme ve çoklu bilgisayar desteğinin planlanan kapsamı [uzak CST çalışma sistemi yol haritasında](docs/remote-cst-roadmap-tr.md) tutulur.
+
 ## Güvenlik ve hata davranışı
 
 Tüm HTTP uçları en az 32 karakterlik aynı Bearer belirteciyle doğrulanır. Düz HTTP, belirteci ağ üzerinde korumaz; gerçek ağda HTTPS kullanılmalıdır. TLS doğrudan host yapılandırmasında veya kurumun HTTPS ters vekilinde sonlandırılabilir. Belirteci Git'e ya da TOML dosyasına yazmayın; `RF_SIM_TOKEN` ortam değişkeninde tutun.
@@ -71,6 +73,8 @@ C:\RFSimWorker\RF-Sim-Okul-Istemcisi.cmd
 ```
 
 GUI'deki **Bağlantıyı test et** düğmesi yalnız tek seferlik erişim ve yetenek kaydı gönderir; kuyruktan iş almaz ve sürekli çevrimiçi kalmaz. Kuyruktaki işi almak için **İşçiyi başlat** düğmesine basılır. İstemci çalışan işi kesmeden güvenli durdurma ister. Host bilgisayarında `rf-sim monitor-gui --url https://HOST-ADRESI` ile istemcilerin çevrimiçi durumu, boş diski, CST sürümü ve etkin işi izlenebilir. Aynı bilgi `rf-sim workers --url ...` ile JSON olarak alınır. `rf-sim probe --config ...` hosta bağlanmadan CST kurulumunu ve disk kapısını denetler.
+
+Doğrulanmış okul pilotunda `scripts/enable-school-cst2025-pilot.ps1`, DPAPI ile kullanıcıya bağlı saklanan belirteç üzerinden işçiyi gizli arka planda hemen başlatır ve Windows oturum açılışına ekler. Bu pilotta her iş için GUI düğmesine basılmaz. Genel kurucu ve kontrollü beklenmeyen-kapanma yeniden başlatması yol haritasında açık iştir.
 
 İşçi yalnız dışarı doğru HTTP(S) isteği gönderdiği için okul bilgisayarında gelen bağlantı açılması gerekmez. Ancak ana bilgisayar URL'sinin okul ağından erişilebilir olması gerekir; Python betikleri NAT'ı kendiliğinden aşmaz. Bu sürümün büyük sonuç yüklemesi doğrudan HTTP(S) bağlantısı kurar ve kurumsal proxy üzerinden çalışmayı desteklemez. Proxy gerekiyorsa yükleme istemcisi ayrıca geliştirilip sınanmalıdır. Bu depo proxy kurmaz veya gerçek okul bağlantısını denemez.
 

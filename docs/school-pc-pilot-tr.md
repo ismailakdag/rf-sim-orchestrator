@@ -1,5 +1,11 @@
 # Okul bilgisayarı pilotu: CST 2025, CPU ve sınırlı disk
 
+## 14 Eylül 2026 G5 sürüm köprüsü zaman aşımı
+
+`school-g5-bridge-control-v3-20260914` işi 20:57:02 Türkiye saatinde `OKUL-PC-01` tarafından kiralandı. İşçi 21:16:45'e kadar `runner_active` heartbeat'i gönderdi. Sabit çalıştırıcının 1.200 saniyelik sınırı 21:17:04'te aşıldı. Sonuç paketi yüklenmedi; iş `needs_attention` durumuna, işçi de yeni iş alamayan güvenli duruma geçti. İkinci kontrast işi hiç kiralanmadı.
+
+İşçi, üst Python süreci ile PID 4144 ve altındaki CST/solver süreçlerinin birlikte kapandığını kanıtlayamadığı için bunları otomatik sonlandırmadı ve işi otomatik yeniden sıraya almadı. Okul bilgisayarında etkin CST/solver kalıp kalmadığı ve yerel iş günlüğü denetlenmeden yeni iş başlatılmaz. Bu kayıt bilimsel sonuç değildir; süreç yaşam döngüsü ve süre sınırı iyileştirmesi için operasyon kanıtıdır.
+
 ## 14 Eylül 2026 gerçek CST 2025 pilot sonucu
 
 `school-cst2025-widefield-20260914-165341` işi okul bilgisayarında CST 2025 ve CPU ile tamamlandı. İş 19:54:28 Türkiye saatinde başladı; solver 19:54:36–19:56:49 arasında 132,141 saniye çalıştı ve bütün iş 145 saniye sürdü. Host 19:56:56'da 613 dosyalı, 9.401.720 baytlık paketi `4b212dd3088ad50e6696f9b68ab610215e0276e22915f4f6c2c920b47ca7d64c` SHA-256 karmasıyla doğruladı. Sonuç tekrar indirilip aynı karma ile denetlendi. Enerji kriteri, pasiflik, proje kapanışı ve 4.001 sonlu kompleks örnek denetimleri geçti.
