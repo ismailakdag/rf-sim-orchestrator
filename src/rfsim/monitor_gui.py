@@ -47,6 +47,7 @@ class MonitorGui:
         ttk.Label(header, text='Simülasyon ağı', style='Title.TLabel').grid(row=0, column=0, sticky='w')
         self.button = ttk.Button(header, text='Şimdi yenile', command=self.refresh)
         self.button.grid(row=0, column=1, padx=(12, 0))
+        ttk.Button(header, text='S-parametreleri', command=self.open_spectra).grid(row=0, column=3, padx=(12, 0))
         ttk.Checkbutton(header, text='İzlemeyi duraklat', variable=self.paused, command=self.toggle).grid(row=0, column=2, padx=(14, 0))
         self.summary = tk.StringVar(value='Bilgisayarlar okunuyor…')
         ttk.Label(frame, textvariable=self.summary).grid(row=1, column=0, sticky='w', pady=(8, 8))
@@ -96,6 +97,13 @@ class MonitorGui:
             except Exception:
                 self.messages.put(([], ['İzleme verisi okunamadı; yeniden denenecek.']))
         threading.Thread(target=fetch, daemon=True).start()
+
+    def open_spectra(self):
+        from .spectra_gui import SpectraWindow
+        if hasattr(self, 'spectra') and not self.spectra.closed:
+            self.spectra.root.lift()
+            return
+        self.spectra = SpectraWindow(self.root, self.client, self.local_current)
 
     def drain(self):
         if self.closed:
