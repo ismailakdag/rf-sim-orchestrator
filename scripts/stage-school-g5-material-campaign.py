@@ -24,10 +24,10 @@ from pathlib import Path
 
 import numpy as np
 
-CONTROL_ID = "school-g5-bridge-control-v2-20260914"
-CONTRAST_ID = "school-g5-bridge-contrast-v2-20260914"
-RUNNER = "cst-g5-material-cst2025-v2"
-SOURCE = {"version": "fr4-g5-material-cst2025-v2", "sha256": "75a950c93b4a8b66eb7199b911d02f7e43643bd3653e8be158eaa827032af8ff"}
+CONTROL_ID = "school-g5-bridge-control-v3-20260914"
+CONTRAST_ID = "school-g5-bridge-contrast-v3-20260914"
+RUNNER = "cst-g5-material-cst2025-v3"
+SOURCE = {"version": "fr4-g5-material-cst2025-v3", "sha256": "32b21f46d00e0e961a456d2bff9906c85c4df02fcfc76facbd9a9650b14435b1"}
 BRIDGE_CASES = {"g5-M01-nominal-near-control", "g5-M01-nominal-near-E16-S018"}
 
 
@@ -158,13 +158,13 @@ def main() -> None:
     submitted = []
     for index, case_id in enumerate(sorted(set(catalog) - BRIDGE_CASES), 1):
         slug = case_id.lower().replace("_", "-")
-        job_id = f"school-g5m2-{index:02d}-{slug}"
+        job_id = f"school-g5m3-{index:02d}-{slug}"
         role = catalog[case_id]["legacy_job"]["role"]
         document = {
             "schema_version": 1, "job_id": job_id, "study_id": "g5-material-sensitivity-v1",
             "runner": RUNNER, "source": SOURCE, "parameters": {"case_id": case_id},
             "deadline_utc": args.deadline_utc, "priority": 80 if role == "same_material_insert" else 50,
-            "metadata": {"required_worker_id": args.worker_id, "campaign": "20260914-g5-material-sensitivity-school-v2", "stage": "material_response_surface", "case_id": case_id},
+            "metadata": {"required_worker_id": args.worker_id, "campaign": "20260914-g5-material-sensitivity-school-v3", "stage": "material_response_surface", "case_id": case_id},
         }
         response = api.json("POST", "/api/v1/jobs", document)
         submitted.append({"job_id": job_id, "case_id": case_id, "document_sha256": response["document_sha256"]})

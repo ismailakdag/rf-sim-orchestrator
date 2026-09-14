@@ -9,17 +9,20 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "pilot/school-g5-material-cst2025-v2/source"
+SOURCE = ROOT / "pilot/school-g5-material-cst2025-v3/source"
 
 
 class G5MaterialSourceTest(unittest.TestCase):
     def test_manifest_and_catalog_are_frozen(self):
         manifest = json.loads((SOURCE / "source-manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["source_version"], "fr4-g5-material-cst2025-v2")
+        self.assertEqual(manifest["source_version"], "fr4-g5-material-cst2025-v3")
         for name, expected in manifest["sha256"].items():
             path = SOURCE / name
             self.assertTrue(path.is_file())
-            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected)
+            data = path.read_bytes()
+            self.assertEqual(hashlib.sha256(data).hexdigest(), expected)
+            if path.suffix.lower() in {".py", ".json", ".md", ".txt"}:
+                self.assertEqual(data, data.replace(b"\r\n", b"\n").replace(b"\r", b"\n"))
         catalog = json.loads((SOURCE / "case-catalog.json").read_text(encoding="utf-8"))
         self.assertEqual(len(catalog["cases"]), 42)
         self.assertTrue(all(case["legacy_job"]["gpu"] is False for case in catalog["cases"].values()))

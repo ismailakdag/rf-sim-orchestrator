@@ -11,7 +11,7 @@ $target = [System.IO.Path]::GetFullPath($InstallDir)
 $config = Join-Path $target "worker.toml"
 $venvPython = Join-Path $target "venv\Scripts\python.exe"
 $adapter = Join-Path $repo "adapters\candidate_local_metal_v2.py"
-$repoSource = Join-Path $repo "pilot\school-g5-material-cst2025-v2\source"
+$repoSource = Join-Path $repo "pilot\school-g5-material-cst2025-v3\source"
 $repoManifestPath = Join-Path $repoSource "source-manifest.json"
 $repoCaseCatalog = Join-Path $repoSource "case-catalog.json"
 
@@ -43,7 +43,7 @@ if ($LASTEXITCODE -ne 0) { throw "CST bağımlılıklarının kurulumu başarıs
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 New-Item -ItemType Directory -Force -Path $target | Out-Null
-$source = Join-Path $target "sources\fr4-g5-material-cst2025-v2"
+$source = Join-Path $target "sources\fr4-g5-material-cst2025-v3"
 New-Item -ItemType Directory -Force -Path $source | Out-Null
 $manifest = Get-Content -LiteralPath $repoManifestPath -Raw | ConvertFrom-Json
 if (-not $manifest.sha256) { throw "Kaynak manifestinde sha256 haritası yok." }
@@ -113,7 +113,7 @@ cst_roots = ["$(TomlValue $cstRootToml)"]
 type = "mock"
 max_mock_delay_seconds = 5
 
-[runners.cst-g5-material-cst2025-v2]
+[runners.cst-g5-material-cst2025-v3]
 type = "fixed_python"
 python = "$(TomlValue $pythonToml)"
 script = "$(TomlValue $adapterToml)"
@@ -124,7 +124,7 @@ expected_cst_major = 2025
 timeout_seconds = 1200
 arguments = ["{job_file}", "{run_dir}", "--source-root", "$(TomlValue $sourceToml)", "--case-catalog", "case-catalog.json", "--compact"]
 
-[runners.cst-g5-material-cst2025-v2.parameter_schema.case_id]
+[runners.cst-g5-material-cst2025-v3.parameter_schema.case_id]
 type = "string"
 required = true
 enum = [$caseIdToml]
