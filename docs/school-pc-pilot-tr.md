@@ -18,7 +18,9 @@ Mock işçisi güvenli biçimde durdurulduktan ve depo güncellendikten sonra ge
 powershell -ExecutionPolicy Bypass -File scripts\enable-school-cst2025-pilot.ps1
 ```
 
-Betik mevcut host URL'sini ve işçi kimliğini korur, eski yapılandırmayı zaman damgalı olarak yedekler, CST 2025 yürütülebilir dosyası ile Python API dizinini doğrular ve yalnız `widefield-compact-M01-near-control-global32` vaka kimliğine izin verir. Uzak iş geometri, malzeme, ağ, GPU veya solver ayarlarını değiştiremez. Betik bittikten sonra GUI yeniden açılır ve **Bağlantıyı test et** çıktısında `CST 2025` ile `cst-widefield-cst2025-pilot-v2` görülmeden gerçek iş gönderilmez.
+Betik mevcut host URL'sini ve işçi kimliğini korur, eski yapılandırmayı zaman damgalı olarak yedekler, CST 2025 yürütülebilir dosyası ile Python API dizinini doğrular ve yalnız `widefield-compact-M01-near-control-global32` vaka kimliğine izin verir. Uzak iş geometri, malzeme, ağ, GPU veya solver ayarlarını değiştiremez. Betik bittikten sonra GUI yeniden açılır ve **Bağlantıyı test et** çıktısında `CST 2025` ile `cst-widefield-cst2025-pilot-v3` görülmeden gerçek iş gönderilmez.
+
+İlk gerçek deneme geometri bloklarının 120'sini tamamladı; son solver ayarı bloğunda CST 2025'in `.FrequencySampleRuleLin` yöntemini desteklememesi nedeniyle solver başlamadan kapandı. Proje kapanışı doğrulandı. `v3` kaynağı CST 2025'te yalnız bu desteklenmeyen çağrıyı atlar; `.FrequencySamples "4001"`, bant, ağ ve fiziksel model korunur.
 
 Mevcut donmuş kaynaklar 2026 API yolunu ve sürüm kaydını sabit içeriyorsa doğrudan çalıştırılmaz. `scripts/prepare-portable-cst-source.py` bunları yeni ve değişmez bir kaynak sürümüne türetir; yerel API yolunu `CST_PYTHON_LIBRARIES`, kaydedilen sürümü `CST_EXPECTED_VERSION` üzerinden alır ve bütün kaynak karmalarını yeniden üretir. `scripts/prepare-cst-runner.ps1` bağdaştırıcı ile yeni manifest karmalarını verir. Bu işlem kaynak uyumluluğunu kanıtlamaz; yanlış 2026 kaydıyla 2025 sonucu yayımlanmasını önler ve gerçek pilotun izlenebilir olmasını sağlar.
 

@@ -379,6 +379,10 @@ def solver_history(config: dict[str, Any]) -> str:
     gpu = bool(config.get("gpu", True))
     accuracy = int(config.get("accuracy_dB", -60))
     pulse_widths = int(config.get("number_of_pulse_widths", 100))
+    target_release = os.environ.get("CST_EXPECTED_VERSION", "unreported")
+    # CST 2025 raises ActiveX error 10091 for FrequencySampleRuleLin. Its
+    # time-domain solver still accepts FrequencySamples for the 1D curves.
+    sample_rule = "" if target_release == "2025" else ' .FrequencySampleRuleLin "Samples"\n'
     if not 20 <= pulse_widths <= 200:
         raise ValidationError("number_of_pulse_widths must be in [20, 200]")
     return f'''Solver.FrequencyRange "1", "6"
@@ -406,7 +410,7 @@ With Solver
  .NumberOfPulseWidths "{pulse_widths}"
  .HardwareAcceleration "{str(gpu)}"
  .MaximumNumberOfThreads "12"
- .FrequencySampleRuleLin "Samples"
+{sample_rule.rstrip()}
  .FrequencySamples "4001"
 End With'''
 
@@ -648,7 +652,7 @@ def run(job_path: Path) -> int:
         record.update(geometry_metadata(job, params))
         record["geometry_manifest"] = geometry_manifest(params)
         record["simulator"] = {"product": "CST Studio Suite", "version": os.environ.get("CST_EXPECTED_VERSION", "unreported"), "api": "official local Python interface"}
-        record["source_version"] = "fr4-widefield-txrx-cst2025-pilot-v2"
+        record["source_version"] = "fr4-widefield-txrx-cst2025-pilot-v3"
         record["material_provenance"] = job["material_provenance"]
         record["fixture"] = job["fixture"]
         record["mesh_convergence_status"] = "exploratory_unconverged"
@@ -666,6 +670,11 @@ def run(job_path: Path) -> int:
             "number_of_pulse_widths": pulse_widths,
             "steady_state_limit_dB": int(job.get("accuracy_dB", -60)),
             "frequency_samples": 4001,
+            "frequency_sample_rule": (
+                "CST 2025 default linear rule; unsupported FrequencySampleRuleLin call omitted"
+                if os.environ.get("CST_EXPECTED_VERSION") == "2025"
+                else "explicit FrequencySampleRuleLin Samples"
+            ),
         }
         write_json(archive / "record.json", record)
 
