@@ -140,16 +140,22 @@ pause
 
 $backgroundScript = Join-Path $target "start-school-worker.ps1"
 $tokenFile = Join-Path $target "worker-token.dpapi"
+$backgroundLog = Join-Path $target "background-worker.log"
 $backgroundText = @"
 `$ErrorActionPreference = "Stop"
 `$mutex = New-Object Threading.Mutex(`$false, "Local\RFSimWorker-$WorkerId")
-if (-not `$mutex.WaitOne(0)) { exit 0 }
+if (-not `$mutex.WaitOne(0)) { exit 23 }
 try {
-    `$secure = Get-Content -LiteralPath "$tokenFile" -Raw | ConvertTo-SecureString
+    `$protectedToken = (Get-Content -LiteralPath "$tokenFile" -Raw).Trim()
+    `$secure = `$protectedToken | ConvertTo-SecureString
     `$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR(`$secure)
     try { `$env:RF_SIM_TOKEN = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(`$ptr) }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR(`$ptr) }
-    & "$venvPython" -m rfsim worker --config "$config" *>> "$(Join-Path $target 'background-worker.log')"
+    & "$venvPython" -m rfsim worker --config "$config" *>> "$backgroundLog"
+    if (`$LASTEXITCODE -ne 0) { throw "İşçi kod `$LASTEXITCODE ile kapandı." }
+} catch {
+    ("{0:u} Başlatma hatası:`r`n{1}" -f (Get-Date), (`$_ | Out-String)) | Add-Content -LiteralPath "$backgroundLog" -Encoding utf8
+    exit 1
 } finally {
     `$mutex.ReleaseMutex()
     `$mutex.Dispose()
@@ -171,8 +177,19 @@ Write-Host "Pilot yapılandırması hazır. CST ve kaynak denetimi:" -Foreground
 & $venvPython -m rfsim probe --config $config
 if ($LASTEXITCODE -ne 0) { throw "Yerel probe başarısız oldu." }
 if ($autostartInstalled) {
-    Start-Process -WindowStyle Hidden -FilePath "powershell.exe" -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', $backgroundScript)
-    Write-Host "Arka plan işçisi başlatıldı ve Windows oturum açılışına eklendi." -ForegroundColor Green
+    $workerProcess = Start-Process -WindowStyle Hidden -FilePath "powershell.exe" -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', $backgroundScript) -PassThru
+    Start-Sleep -Seconds 3
+    $workerProcess.Refresh()
+    if ($workerProcess.HasExited) {
+        if ($workerProcess.ExitCode -eq 23) {
+            Write-Host "Mevcut arka plan işçisi zaten çalışıyor; Windows oturum açılışı kaydı da hazır." -ForegroundColor Green
+        } else {
+            $tail = if (Test-Path -LiteralPath $backgroundLog) { (Get-Content -LiteralPath $backgroundLog -Tail 30) -join "`n" } else { "Günlük oluşturulamadı." }
+            throw "Arka plan işçisi başlayamadı (kod $($workerProcess.ExitCode)).`n$tail"
+        }
+    } else {
+        Write-Host "Arka plan işçisi başlatıldı (PID $($workerProcess.Id)) ve Windows oturum açılışına eklendi." -ForegroundColor Green
+    }
 } else {
     Write-Warning "RF_SIM_TOKEN bu PowerShell oturumunda yoktu; otomatik başlatma kurulmadı. Belirteci ayarlayıp betiği yeniden çalıştırın."
 }
