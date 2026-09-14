@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover
 from .common import JOB_ID_RE, ValidationError, sha256_file, validate_result_zip
 from .host import HostServer, Store
 from .worker import ApiClient, Worker, default_worker_id
+from .capabilities import detect_cst_installations
 
 
 def load_config(path: str) -> dict:
@@ -78,14 +79,61 @@ def command_resolve(args) -> None:
     print_json(ApiClient(args.url, token_from(args)).json("POST", f"/api/v1/jobs/{args.job_id}/resolve", {"reason": args.reason}))
 
 
-def command_worker(args) -> None:
+def worker_from_config(args) -> tuple[Worker, dict]:
     config = load_config(args.config)
     worker_config = config["worker"]
-    worker = Worker(ApiClient(worker_config["host_url"], token_from(args)), worker_config.get("worker_id", default_worker_id()), Path(worker_config["data_dir"]), config["runners"], int(worker_config.get("heartbeat_seconds", 30)))
+    root = Path(worker_config["data_dir"])
+    worker = Worker(
+        ApiClient(worker_config["host_url"], token_from(args)),
+        worker_config.get("worker_id", default_worker_id()), root, config["runners"],
+        int(worker_config.get("heartbeat_seconds", 30)),
+        int(float(worker_config.get("min_free_gb", 0)) * 1024**3),
+        bool(worker_config.get("cleanup_after_upload", False)),
+        list(worker_config.get("cst_roots", [])),
+    )
+    return worker, config
+
+
+def command_worker(args) -> None:
+    worker, config = worker_from_config(args)
+    worker_config = config["worker"]
     if args.once:
         print_json(worker.once() or {"state": "idle"})
     else:
         worker.loop(int(worker_config.get("poll_seconds", 10)))
+
+
+def command_workers(args) -> None:
+    print_json(ApiClient(args.url, token_from(args)).json("GET", "/api/v1/workers"))
+
+
+def command_probe(args) -> None:
+    config = load_config(args.config)
+    worker_config = config["worker"]
+    root = Path(worker_config["data_dir"]).resolve()
+    disk_probe = root
+    while not disk_probe.exists() and disk_probe.parent != disk_probe:
+        disk_probe = disk_probe.parent
+    usage = __import__("shutil").disk_usage(disk_probe)
+    print_json({
+        "worker_id": worker_config.get("worker_id", default_worker_id()),
+        "host_url": worker_config["host_url"], "data_dir": str(root),
+        "disk": {"free_bytes": usage.free, "total_bytes": usage.total, "free_gb": round(usage.free / 1024**3, 2)},
+        "minimum_free_gb": float(worker_config.get("min_free_gb", 0)),
+        "cleanup_after_upload": bool(worker_config.get("cleanup_after_upload", False)),
+        "cst_installations": detect_cst_installations(list(worker_config.get("cst_roots", []))),
+        "runners": sorted(config["runners"]),
+    })
+
+
+def command_worker_gui(args) -> None:
+    from .gui import run_worker_gui
+    run_worker_gui(args.config, getattr(args, "token", None))
+
+
+def command_monitor_gui(args) -> None:
+    from .gui import run_monitor_gui
+    run_monitor_gui(args.url, token_from(args))
 
 
 def command_results(args) -> None:
@@ -162,6 +210,21 @@ def parser() -> argparse.ArgumentParser:
     worker.add_argument("--token")
     worker.add_argument("--once", action="store_true")
     worker.set_defaults(func=command_worker)
+    workers = sub.add_parser("workers", help="show known workers and online state")
+    workers.add_argument("--url", required=True)
+    workers.add_argument("--token")
+    workers.set_defaults(func=command_workers)
+    probe = sub.add_parser("probe", help="inspect a worker configuration without contacting the host or launching CST")
+    probe.add_argument("--config", required=True)
+    probe.set_defaults(func=command_probe)
+    worker_gui = sub.add_parser("worker-gui", help="open the school-computer worker control window")
+    worker_gui.add_argument("--config", required=True)
+    worker_gui.add_argument("--token")
+    worker_gui.set_defaults(func=command_worker_gui)
+    monitor_gui = sub.add_parser("monitor-gui", help="open the host worker/job monitor")
+    monitor_gui.add_argument("--url", required=True)
+    monitor_gui.add_argument("--token")
+    monitor_gui.set_defaults(func=command_monitor_gui)
     wol = sub.add_parser("wol", help="send one Wake-on-LAN magic packet")
     wol.add_argument("--mac", required=True)
     wol.add_argument("--broadcast", required=True)

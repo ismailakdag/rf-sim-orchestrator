@@ -1,4 +1,4 @@
-"""Local-only bridge from an orchestrator job to the frozen CST 2026 night_case runner.
+"""Local-only bridge from an orchestrator job to a pinned CST night_case runner.
 
 This adapter is never enabled automatically. The worker administrator must pin
 its hash, the frozen source-manifest hash, Python executable and source path in
@@ -114,6 +114,7 @@ def main() -> int:
     parser.add_argument("job_file", type=Path)
     parser.add_argument("run_dir", type=Path)
     parser.add_argument("--source-root", type=Path, required=True)
+    parser.add_argument("--compact", action="store_true", help="retain reproducible evidence and remove bulky local CST work after validation")
     args = parser.parse_args()
     # Resolve both sides before recording relative paths: Windows may supply a
     # short (8.3) TEMP path while resolve() expands the run directory's spelling.
@@ -125,7 +126,10 @@ def main() -> int:
     manifest_path = source_root / "source-manifest.json"
     if not manifest_path.is_file() or manifest_path.is_symlink():
         raise RuntimeError("source-manifest.json must be a regular local file")
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = manifest_document.get("sha256", manifest_document)
+    if not isinstance(manifest, dict) or not manifest or not all(isinstance(name, str) and isinstance(digest, str) for name, digest in manifest.items()):
+        raise RuntimeError("source-manifest.json has no valid SHA-256 mapping")
     if sha256(manifest_path) != job["source"]["sha256"]:
         raise RuntimeError("frozen source-manifest hash differs from submitted job")
     verified_sources = {}
@@ -157,6 +161,7 @@ def main() -> int:
     }
     optional_compact = {
         "logs/summary.md": raw_archive / "summary.md",
+        "source/model.vba": raw_archive / "model.vba",
     }
     missing = [str(source) for source in compact_mapping.values() if not source.is_file()]
     if missing:
@@ -166,21 +171,35 @@ def main() -> int:
     exclusive_copy(manifest_path, run_dir / "source" / "source-manifest.json")
     for name, source_path in verified_sources.items():
         exclusive_copy(source_path, run_dir / "source" / "pinned-source" / name)
+    large_artifacts = {
+        "model": {"path": str((raw_work / "model.cst").relative_to(run_dir)), "size": (raw_work / "model.cst").stat().st_size, "sha256": sha256(raw_work / "model.cst")},
+        "mesh_grid": ({"path": str((raw_archive / "mesh-grid.bin").relative_to(run_dir)), "size": (raw_archive / "mesh-grid.bin").stat().st_size, "sha256": sha256(raw_archive / "mesh-grid.bin")} if (raw_archive / "mesh-grid.bin").is_file() else None),
+    }
     transport = {
         "raw_archive": str(raw_archive),
         "raw_work": str(raw_work),
-        "raw_archive_preserved": True,
-        "raw_work_preserved": True,
+        "raw_archive_preserved": not args.compact,
+        "raw_work_preserved": not args.compact,
         "compact_copies": {name: str(source.relative_to(run_dir)) for name, source in compact_mapping.items()},
-        "large_artifacts": {
-            "model": {"path": str((raw_work / "model.cst").relative_to(run_dir)), "size": (raw_work / "model.cst").stat().st_size, "sha256": sha256(raw_work / "model.cst")},
-            "mesh_grid": ({"path": str((raw_archive / "mesh-grid.bin").relative_to(run_dir)), "size": (raw_archive / "mesh-grid.bin").stat().st_size, "sha256": sha256(raw_archive / "mesh-grid.bin")} if (raw_archive / "mesh-grid.bin").is_file() else None),
-        },
+        "large_artifacts": large_artifacts,
         "verified_source_files": {name: {"path": str(path), "sha256": manifest[name]} for name, path in verified_sources.items()},
         "adapter_validation": {"results_validated": True, "project_closed": True, "sparameter_rows": validation["sparameter_rows"]},
     }
     (run_dir / "parameters" / "transport-mapping.json").write_text(json.dumps(transport, ensure_ascii=False, indent=2), encoding="utf-8")
     exclusive_copy(legacy_job, run_dir / "logs" / "legacy-job.json")
+    if args.compact:
+        required = [run_dir / "source" / "source-manifest.json", run_dir / "source" / "pinned-source" / "night_case.py", run_dir / "source" / "model.vba", run_dir / "parameters" / "record.json", run_dir / "results" / "sparameters.csv.gz", run_dir / "quality" / "verified.json"]
+        if not all(path.is_file() for path in required):
+            raise RuntimeError("compact cleanup refused because reproducibility evidence is incomplete")
+        for target in (raw_archive, raw_work):
+            resolved = target.resolve(strict=True)
+            if resolved.parent.parent != run_dir and resolved.parent != run_dir / "model":
+                raise RuntimeError(f"compact cleanup target is outside the owned run tree: {target}")
+            if target.is_symlink() or getattr(target, "is_junction", lambda: False)():
+                raise RuntimeError(f"compact cleanup target is a link: {target}")
+            shutil.rmtree(target)
+        transport["compacted_utc"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat().replace("+00:00", "Z")
+        (run_dir / "parameters" / "transport-mapping.json").write_text(json.dumps(transport, ensure_ascii=False, indent=2), encoding="utf-8")
     return 0
 
 

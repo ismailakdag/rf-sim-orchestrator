@@ -1,0 +1,22 @@
+# Mock aktarım ve tek CST 2025 CPU pilotu doğrulandıktan sonra hazırlanacak örnek.
+# Yer tutucu karmalar gerçek kurulumda scripts/prepare-cst-runner.ps1 ile değiştirilir.
+[worker]
+host_url = "https://HOST-ADRESI"
+worker_id = "OKUL-PC-01"
+data_dir = "C:/RFSimWorker/data"
+heartbeat_seconds = 30
+poll_seconds = 15
+min_free_gb = 15
+cleanup_after_upload = false
+cst_roots = ["C:/Program Files/CST Studio Suite 2025"]
+
+[runners.cst-night-case-v1]
+type = "fixed_python"
+python = "C:/RFSimWorker/venv/Scripts/python.exe"
+script = "C:/RFSimWorker/repo/adapters/candidate_local_metal_v2.py"
+script_sha256 = "ADAPTER_SHA256"
+source_sha256 = "SOURCE_MANIFEST_SHA256"
+cst_python_libraries = "C:/Program Files/CST Studio Suite 2025/AMD64/python_cst_libraries"
+expected_cst_major = 2025
+arguments = ["{job_file}", "{run_dir}", "--source-root", "C:/RFSimWorker/sources/FROZEN_SOURCE"]
+timeout_seconds = 1200

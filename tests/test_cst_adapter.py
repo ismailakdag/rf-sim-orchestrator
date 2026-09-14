@@ -115,6 +115,33 @@ class CstAdapterOfflineContractTest(unittest.TestCase):
             self.assertTrue(mapping["raw_work_preserved"])
             self.assertEqual(mapping["adapter_validation"]["sparameter_rows"], 2)
 
+    def test_compact_mode_accepts_versioned_manifest_and_removes_only_raw_cst_trees(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source, run_dir = temp / "frozen-source", temp / "run"
+            source.mkdir(); run_dir.mkdir()
+            night_case = source / "night_case.py"
+            night_case.write_text(FAKE_NIGHT_CASE, encoding="utf-8")
+            night_hash = hashlib.sha256(night_case.read_bytes()).hexdigest()
+            source_manifest = source / "source-manifest.json"
+            source_manifest.write_text(json.dumps({"source_version": "fixture-v1", "sha256": {"night_case.py": night_hash}}, indent=2), encoding="utf-8")
+            job = {
+                "schema_version": 1, "job_id": "compact-1", "study_id": "tooth-sensor", "runner": "cst-fixture",
+                "source": {"version": "fixture-v1", "sha256": hashlib.sha256(source_manifest.read_bytes()).hexdigest()},
+                "parameters": {}, "deadline_utc": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+            }
+            job_file = run_dir / "job.json"; job_file.write_text(json.dumps(job), encoding="utf-8")
+            result = subprocess.run([sys.executable, str(ADAPTER), str(job_file), str(run_dir), "--source-root", str(source), "--compact"], cwd=ROOT, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse((run_dir / "source" / "cst-archive").exists())
+            self.assertFalse((run_dir / "model" / "cst-work").exists())
+            self.assertTrue((run_dir / "source" / "model.vba").is_file())
+            self.assertTrue((run_dir / "source" / "pinned-source" / "night_case.py").is_file())
+            mapping = json.loads((run_dir / "parameters" / "transport-mapping.json").read_text(encoding="utf-8"))
+            self.assertFalse(mapping["raw_archive_preserved"])
+            self.assertFalse(mapping["raw_work_preserved"])
+            self.assertIn("compacted_utc", mapping)
+
 
 if __name__ == "__main__":
     unittest.main()

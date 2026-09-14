@@ -2,7 +2,7 @@
 
 Bu depo, birbirinden bağımsız RF/EM simülasyon işlerini bir ana bilgisayar ile dışarı doğru bağlantı kuran Windows işçileri arasında dağıtmak için küçük ve denetlenebilir bir altyapıdır. Ana bilgisayar değişmez işleri SQLite kuyruğunda saklar. Her işçi aynı anda yalnız bir iş kiralar, yerel izin listesindeki bir çalıştırıcıyı çağırır ve tam sonuç paketini geri yükler.
 
-Bu yazılım tek bir CST çözümünü hızlandırmaz. Birden fazla bağımsız koşuyu farklı bilgisayarlarda yürütmeye yarar. Okul bilgisayarlarının adresleri, erişim yetkisi, CST sürümü ve lisans kapasitesi henüz doğrulanmadığı için bu depo canlı okul kurulumu yapmaz ve hiçbir CST oturumu başlatmaz.
+Bu yazılım tek bir CST çözümünü hızlandırmaz. Birden fazla bağımsız koşuyu farklı bilgisayarlarda yürütmeye yarar. Okul bilgisayarı istemcisi CST'yi iç ağdan erişilebilir yapmaz; hosta yalnız dışarı doğru HTTPS bağlantısı kurar. Canlı CST kullanımı, kurulum ve lisans doğrulamasından sonra tek küçük pilotla açılır.
 
 Mimariyi, hata durumlarını ve okul kurulumu öncesi karar kapılarını tarayıcıda görmek için [çevrimdışı sunumu](presentation/index.html) açabilirsiniz.
 
@@ -62,6 +62,16 @@ Ana bilgisayarda `examples/host.toml` dosyasını çalışma kopyasına alın; `
 
 Okul bilgisayarında depoyu ve sanal ortamı ayrı bir klasöre kurun. `examples/worker.toml` kopyasında ana bilgisayarın erişilebilir HTTPS adresini, benzersiz işçi kimliğini ve yerel veri dizinini yazın. Aynı güçlü belirteci kullanıcı kapsamındaki `RF_SIM_TOKEN` ortam değişkenine koyun. Ardından `python -m rfsim worker --config ... --once` veya kurulu `rf-sim worker` komutuyla önce mock işi doğrulayın. Sürekli çalışma daha sonra Windows Görev Zamanlayıcı'da kullanıcı oturumu ve kurum politikalarıyla uyumlu bir görev olarak kurulabilir.
 
+Okul bilgisayarı için kurulum ve GUI:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-school-worker.ps1 -HostUrl https://HOST-ADRESI -WorkerId OKUL-PC-01
+$env:RF_SIM_TOKEN = "HOST-ILE-AYNI-UZUN-BELIRTEC"
+C:\RFSimWorker\RF-Sim-Okul-Istemcisi.cmd
+```
+
+GUI bağlantıyı sınar, istemciyi başlatır ve çalışan işi kesmeden güvenli durdurma ister. Host bilgisayarında `rf-sim monitor-gui --url https://HOST-ADRESI` ile istemcilerin çevrimiçi durumu, boş diski, CST sürümü ve etkin işi izlenebilir. Aynı bilgi `rf-sim workers --url ...` ile JSON olarak alınır. `rf-sim probe --config ...` hosta bağlanmadan CST kurulumunu ve disk kapısını denetler.
+
 İşçi yalnız dışarı doğru HTTP(S) isteği gönderdiği için okul bilgisayarında gelen bağlantı açılması gerekmez. Ancak ana bilgisayar URL'sinin okul ağından erişilebilir olması gerekir; Python betikleri NAT'ı kendiliğinden aşmaz. Bu sürümün büyük sonuç yüklemesi doğrudan HTTP(S) bağlantısı kurar ve kurumsal proxy üzerinden çalışmayı desteklemez. Proxy gerekiyorsa yükleme istemcisi ayrıca geliştirilip sınanmalıdır. Bu depo proxy kurmaz veya gerçek okul bağlantısını denemez.
 
 ## İş belgesi ve durumlar
@@ -80,11 +90,13 @@ rf-sim requeue --url https://HOST:8765 JOB-ID --reason "Okul bilgisayarında CST
 rf-sim resolve --url https://HOST:8765 JOB-ID --reason "Okul bilgisayarı kontrol edildi; bu işe ait etkin solver veya alt süreç bulunmuyor."
 ```
 
-## CST 2026 bağdaştırıcısı
+## CST 2025/2026 bağdaştırıcısı
 
 `adapters/candidate_local_metal_v2.py`, mevcut `candidate-local-metal-v2/night_case.py` akışına isteğe bağlı bir köprüdür. Örnek yapılandırma `examples/cst-candidate-local-metal-v2.toml.example` içindedir. Kaynak kanıtı olarak depoya kopya alınmamış, yalnız mevcut donmuş kaynak manifestinin SHA-256 değeri ve yerel yol kullanılmıştır.
 
-Bağdaştırıcı ancak okul bilgisayarında CST 2026, resmi Python kitaplıkları, kaynak dosyaları ve lisans erişimi ayrı ayrı doğrulandıktan sonra etkinleştirilmelidir. Yerel `script_sha256` değeri kurulum sırasında hesaplanmalıdır. Çalıştırıcı kaynak manifestini ve içindeki her kaynak karmasını yeniden doğrular, legacy iş belgesini yerel olarak üretir, `night_case.py` betiğini sabit komutla çağırır ve doğrulanmış arşivi ortak paket düzenine taşır. Bu depodaki geliştirme ve testler CST'ye bağlanmamış ve solver başlatmamıştır.
+Bağdaştırıcı CST sürümüne sabit bir kurulum yolu kullanmaz. İşçi yapılandırmasındaki `cst_python_libraries`, seçilen yerel kurulumun resmi Python kitaplıklarını alt sürece verir. CST 2025 ile CST 2026 arasında API veya proje biçimi farkı bulunabileceği için eski `.cst` dosyası geri açılmaz; donmuş Python kaynakları ve üretilen VBA ile model hedef sürümde yeniden kurulur. Uyumluluk yine tek küçük gerçek pilotla kanıtlanmalıdır. Yerel `script_sha256` değeri kurulum sırasında hesaplanmalıdır. Çalıştırıcı kaynak manifestini ve içindeki her kaynak karmasını yeniden doğrular, legacy iş belgesini yerel olarak üretir, `night_case.py` betiğini sabit komutla çağırır ve doğrulanmış arşivi ortak paket düzenine taşır.
+
+Sınırlı disk kullanımı için iki ayrı, varsayılan olarak kapalı seçenek vardır. Bağdaştırıcıdaki `--compact`, doğrulanmış model VBA'sını ve yeniden üretim kaynaklarını tutup büyük ham CST çalışma ağacını paketlemeden önce kaldırır. İşçideki `cleanup_after_upload=true`, host paketi doğrulayıp aynı SHA-256 değerini döndürdükten sonra yerel iş klasörünü ve yükleme ZIP'ini siler; yalnız makbuz kalır. İlk mock ve CST pilotlarında ikisi de kapalı tutulmalıdır. Ayrıntılı sıra [okul bilgisayarı pilot belgesindedir](docs/school-pc-pilot-tr.md).
 
 Bağdaştırıcı örneğindeki parametre sınırları kampanya öncesi mevcut `night_case.py` sözleşmesine göre genişletilmelidir. Eksik veya fazla parametre kapalı güvenli biçimde reddedilir. Yeni bir kaynak sürümü ya da betik değişikliği yeni karmalar ve inceleme gerektirir.
 

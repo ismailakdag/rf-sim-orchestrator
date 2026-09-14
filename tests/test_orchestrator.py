@@ -20,7 +20,7 @@ sys.path.insert(0, str(SRC))
 
 from rfsim.common import ValidationError, validate_result_zip
 from rfsim.host import Store
-from rfsim.worker import _validate_parameter_schema
+from rfsim.worker import Worker, _validate_parameter_schema
 
 
 def future() -> str:
@@ -40,6 +40,23 @@ def job(job_id: str = "test-1") -> dict:
 
 
 class ValidationTests(unittest.TestCase):
+    def test_worker_presence_reports_online_then_offline(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Store(Path(temp), 60, {"mock-v1"}, 10_000_000, 20_000_000)
+            accepted = store.worker_presence({
+                "worker_id": "school-pc", "state": "idle", "hostname": "LAB-PC",
+                "runners": ["mock-v1"], "capabilities": {"gpu_required": False},
+                "free_bytes": 29 * 1024**3, "total_bytes": 100 * 1024**3,
+                "current_job_id": None,
+            })
+            self.assertTrue(accepted["accepted"])
+            listed = store.workers(online_seconds=90)["workers"][0]
+            self.assertTrue(listed["online"])
+            self.assertEqual(listed["state"], "idle")
+            with store.connect() as db:
+                db.execute("UPDATE workers SET last_seen_utc='2000-01-01T00:00:00Z'")
+            self.assertFalse(store.workers(online_seconds=90)["workers"][0]["online"])
+
     def test_job_is_immutable_and_allowlisted(self):
         with tempfile.TemporaryDirectory() as temp:
             store = Store(Path(temp), 60, {"mock-v1"}, 10_000_000, 20_000_000)
@@ -106,7 +123,7 @@ class SubprocessEndToEndTest(unittest.TestCase):
             worker_config = temp / "worker.toml"
             job_file = temp / "job.json"
             host_config.write_text(f'[host]\nbind="127.0.0.1"\nport={port}\ndata_dir="{(temp / "host").as_posix()}"\nlease_seconds=30\nallowed_runners=["mock-v1"]\nmax_result_bytes=10000000\nmax_uncompressed_bytes=20000000\n', encoding="utf-8")
-            worker_config.write_text(f'[worker]\nhost_url="http://127.0.0.1:{port}"\nworker_id="subprocess-worker"\ndata_dir="{(temp / "worker").as_posix()}"\nheartbeat_seconds=1\n[runners.mock-v1]\ntype="mock"\nmax_mock_delay_seconds=1\n', encoding="utf-8")
+            worker_config.write_text(f'[worker]\nhost_url="http://127.0.0.1:{port}"\nworker_id="subprocess-worker"\ndata_dir="{(temp / "worker").as_posix()}"\nheartbeat_seconds=1\nmin_free_gb=0.001\ncleanup_after_upload=true\n[runners.mock-v1]\ntype="mock"\nmax_mock_delay_seconds=1\n', encoding="utf-8")
             job_file.write_text(json.dumps(job("e2e-1")), encoding="utf-8")
             env = {**os.environ, "PYTHONPATH": str(SRC), "RF_SIM_TOKEN": token}
             host = subprocess.Popen([sys.executable, "-m", "rfsim", "host", "--config", str(host_config)], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, text=True)
@@ -133,6 +150,12 @@ class SubprocessEndToEndTest(unittest.TestCase):
                 run_cli("submit", "--url", url, str(job_file))
                 worker_result = json.loads(run_cli("worker", "--config", str(worker_config), "--once").stdout)
                 self.assertEqual(worker_result["state"], "completed")
+                self.assertEqual(worker_result["local_cleanup"], "completed")
+                self.assertTrue((temp / "worker" / "receipts" / "e2e-1.json").is_file())
+                self.assertFalse((temp / "worker" / "runs" / "e2e-1").exists())
+                workers = json.loads(run_cli("workers", "--url", url).stdout)["workers"]
+                self.assertEqual(workers[0]["worker_id"], "subprocess-worker")
+                self.assertTrue(workers[0]["online"])
                 status = json.loads(run_cli("status", "--url", url, "e2e-1").stdout)
                 self.assertEqual(status["state"], "completed")
                 destination = temp / "download" / "e2e-1.zip"

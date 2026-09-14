@@ -31,6 +31,12 @@ CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, utc TEXT NOT NULL,
   event TEXT NOT NULL, details TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS workers (
+  worker_id TEXT PRIMARY KEY, first_seen_utc TEXT NOT NULL, last_seen_utc TEXT NOT NULL,
+  state TEXT NOT NULL, hostname TEXT NOT NULL, current_job_id TEXT,
+  free_bytes INTEGER, total_bytes INTEGER, runners TEXT NOT NULL,
+  capabilities TEXT NOT NULL, note TEXT
+);
 """
 
 
@@ -104,6 +110,61 @@ class Store:
                 return result
             rows = db.execute("SELECT job_id,state,submitted_utc,updated_utc,worker_id,lease_expires_utc,attempt,result_sha256,result_bytes,note FROM jobs ORDER BY submitted_utc").fetchall()
             return {"jobs": [dict(row) for row in rows]}
+
+    def worker_presence(self, raw: dict) -> dict:
+        worker_id = raw.get("worker_id")
+        state = raw.get("state")
+        hostname = raw.get("hostname")
+        runners = raw.get("runners", [])
+        capabilities = raw.get("capabilities", {})
+        current_job_id = raw.get("current_job_id")
+        free_bytes = raw.get("free_bytes")
+        total_bytes = raw.get("total_bytes")
+        note = raw.get("note")
+        if not isinstance(worker_id, str) or not worker_id or len(worker_id) > 128:
+            raise ValidationError("invalid worker_id")
+        if state not in {"idle", "running", "low_disk", "needs_attention", "stopping"}:
+            raise ValidationError("invalid worker state")
+        if not isinstance(hostname, str) or not hostname or len(hostname) > 255:
+            raise ValidationError("invalid worker hostname")
+        if not isinstance(runners, list) or not all(isinstance(x, str) and len(x) <= 128 for x in runners):
+            raise ValidationError("invalid worker runner list")
+        if not isinstance(capabilities, dict) or len(canonical_json(capabilities)) > 64 * 1024:
+            raise ValidationError("invalid worker capabilities")
+        if current_job_id is not None and (not isinstance(current_job_id, str) or not JOB_ID_RE.fullmatch(current_job_id)):
+            raise ValidationError("invalid current_job_id")
+        if free_bytes is not None and (type(free_bytes) is not int or free_bytes < 0):
+            raise ValidationError("invalid free_bytes")
+        if total_bytes is not None and (type(total_bytes) is not int or total_bytes < 0):
+            raise ValidationError("invalid total_bytes")
+        if note is not None and not isinstance(note, str):
+            raise ValidationError("invalid worker note")
+        now = utc_now()
+        encoded_runners = json.dumps(sorted(set(runners)), ensure_ascii=False)
+        encoded_capabilities = json.dumps(capabilities, ensure_ascii=False, sort_keys=True)
+        with self.lock, self.connect() as db:
+            db.execute(
+                """INSERT INTO workers(worker_id,first_seen_utc,last_seen_utc,state,hostname,current_job_id,free_bytes,total_bytes,runners,capabilities,note)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(worker_id) DO UPDATE SET last_seen_utc=excluded.last_seen_utc,state=excluded.state,
+                   hostname=excluded.hostname,current_job_id=excluded.current_job_id,free_bytes=excluded.free_bytes,
+                   total_bytes=excluded.total_bytes,runners=excluded.runners,capabilities=excluded.capabilities,note=excluded.note""",
+                (worker_id, now, now, state, hostname, current_job_id, free_bytes, total_bytes, encoded_runners, encoded_capabilities, (note or "")[:2000]),
+            )
+        return {"worker_id": worker_id, "accepted": True, "last_seen_utc": now}
+
+    def workers(self, online_seconds: int = 90) -> dict:
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=online_seconds)
+        with self.lock, self.connect() as db:
+            rows = db.execute("SELECT * FROM workers ORDER BY worker_id").fetchall()
+        workers = []
+        for raw in rows:
+            item = dict(raw)
+            item["runners"] = json.loads(item["runners"])
+            item["capabilities"] = json.loads(item["capabilities"])
+            item["online"] = parse_utc(item["last_seen_utc"]) >= cutoff
+            workers.append(item)
+        return {"workers": workers, "online_seconds": online_seconds, "server_utc": utc_now()}
 
     def lease(self, worker_id: str, runners: list[str]) -> dict | None:
         if not worker_id or len(worker_id) > 128 or not all(isinstance(x, str) for x in runners):
@@ -307,6 +368,8 @@ class ApiHandler(BaseHTTPRequestHandler):
             path = urlparse(self.path).path
             if path == "/api/v1/jobs":
                 return self.send_json(200, self.app.store.status())
+            if path == "/api/v1/workers":
+                return self.send_json(200, self.app.store.workers())
             if path.startswith("/api/v1/jobs/"):
                 job_id = path.removeprefix("/api/v1/jobs/")
                 return self.send_json(200, self.app.store.status(job_id))
@@ -343,6 +406,8 @@ class ApiHandler(BaseHTTPRequestHandler):
                 body = self.read_json()
                 leased = self.app.store.lease(body.get("worker_id", ""), body.get("runners", []))
                 return self.send_json(200, {"lease": leased})
+            if path == "/api/v1/workers/presence":
+                return self.send_json(200, self.app.store.worker_presence(self.read_json()))
             if path.endswith("/heartbeat") and path.startswith("/api/v1/jobs/"):
                 job_id = path.split("/")[-2]
                 body = self.read_json()

@@ -1,0 +1,15 @@
+# İlk okul bilgisayarı denemesi: yalnız mock, hiçbir dosya otomatik silinmez.
+[worker]
+host_url = "https://HOST-ADRESI"
+worker_id = "OKUL-PC-01"
+data_dir = "C:/RFSimWorker/data"
+heartbeat_seconds = 30
+poll_seconds = 15
+min_free_gb = 15
+cleanup_after_upload = false
+cst_roots = ["C:/Program Files/CST Studio Suite 2025"]
+
+[runners.mock-v1]
+type = "mock"
+max_mock_delay_seconds = 5
+

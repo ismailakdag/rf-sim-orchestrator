@@ -11,6 +11,7 @@ import time
 import platform
 import math
 import stat
+import shutil
 from datetime import datetime, timezone
 import urllib.error
 import urllib.request
@@ -19,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .common import ValidationError, canonical_json, parse_utc, safe_member_name, sha256_bytes, sha256_file, utc_now, write_json_atomic
+from .capabilities import detect_cst_installations
 
 
 class ExecutionUncertain(RuntimeError):
@@ -202,8 +204,18 @@ def run_fixed_python(job: dict, run_dir: Path, config: dict) -> None:
     runtime_path = run_dir / "logs" / "external-process.json"
     runtime_path.parent.mkdir(parents=True, exist_ok=True)
     started_utc = utc_now()
+    child_env = os.environ.copy()
+    cst_libraries = config.get("cst_python_libraries")
+    if cst_libraries:
+        libraries = Path(cst_libraries).resolve(strict=True)
+        if not libraries.is_dir():
+            raise ValidationError("configured CST Python library path is not a directory")
+        child_env["PYTHONPATH"] = str(libraries) + (os.pathsep + child_env["PYTHONPATH"] if child_env.get("PYTHONPATH") else "")
+        child_env["CST_PYTHON_LIBRARIES"] = str(libraries)
+    if expected_cst_major := config.get("expected_cst_major"):
+        child_env["CST_EXPECTED_VERSION"] = str(int(expected_cst_major))
     with (run_dir / "adapter.stdout.log").open("wb") as output:
-        process = subprocess.Popen([str(python), str(script), *args], stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, shell=False)
+        process = subprocess.Popen([str(python), str(script), *args], stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, shell=False, env=child_env)
         write_json_atomic(runtime_path, {"pid": process.pid, "started_utc": started_utc, "timeout_seconds": timeout, "state": "running"})
         try:
             return_code = process.wait(timeout=timeout)
@@ -219,15 +231,69 @@ RUNNER_TYPES = {"mock": run_mock, "fixed_python": run_fixed_python}
 
 
 class Worker:
-    def __init__(self, client: ApiClient, worker_id: str, root: Path, runners: dict[str, dict], heartbeat_seconds: int = 30):
+    def __init__(self, client: ApiClient, worker_id: str, root: Path, runners: dict[str, dict], heartbeat_seconds: int = 30, min_free_bytes: int = 0, cleanup_after_upload: bool = False, cst_roots: list[str] | None = None):
         self.client = client
         self.worker_id = worker_id
         self.root = root.resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.runners = runners
         self.heartbeat_seconds = heartbeat_seconds
+        self.min_free_bytes = min_free_bytes
+        self.cleanup_after_upload = cleanup_after_upload
+        self.cst_roots = cst_roots or []
+
+    def disk_usage(self):
+        return shutil.disk_usage(self.root)
+
+    def presence(self, state: str, current_job_id: str | None = None, note: str | None = None) -> dict:
+        usage = self.disk_usage()
+        capabilities = {
+            "platform": platform.platform(),
+            "python": platform.python_version(),
+            "cst_installations": detect_cst_installations(self.cst_roots),
+            "gpu_required": False,
+            "cleanup_after_upload": self.cleanup_after_upload,
+        }
+        payload = {
+            "worker_id": self.worker_id,
+            "state": state,
+            "hostname": socket.gethostname(),
+            "current_job_id": current_job_id,
+            "free_bytes": usage.free,
+            "total_bytes": usage.total,
+            "runners": sorted(self.runners),
+            "capabilities": capabilities,
+            "note": note,
+        }
+        return self.client.json("POST", "/api/v1/workers/presence", payload)
+
+    def _safe_cleanup(self, run_dir: Path, bundle: Path, job: dict, result: dict) -> Path:
+        local_hash = sha256_file(bundle)
+        if result.get("state") != "completed" or result.get("job_id") != job["job_id"] or result.get("result_sha256") != local_hash:
+            raise ExecutionUncertain("host acceptance did not exactly match the uploaded result; local files retained")
+        runs_root = (self.root / "runs").resolve()
+        resolved_run = run_dir.resolve(strict=True)
+        if resolved_run.parent != runs_root or resolved_run.name != job["job_id"] or run_dir.is_symlink():
+            raise ValidationError("refusing cleanup outside the owned per-job run directory")
+        manifest = json.loads((resolved_run / "manifest.json").read_text(encoding="utf-8"))
+        if manifest.get("job_id") != job["job_id"]:
+            raise ValidationError("refusing cleanup because local manifest ownership differs")
+        receipts = self.root / "receipts"
+        receipt = receipts / f"{job['job_id']}.json"
+        write_json_atomic(receipt, {
+            "job_id": job["job_id"], "host_state": "completed", "result_sha256": local_hash,
+            "result_bytes": bundle.stat().st_size, "uploaded_utc": utc_now(), "local_payload_deleted": True,
+        })
+        shutil.rmtree(resolved_run)
+        bundle.unlink()
+        return receipt
 
     def once(self) -> dict | None:
+        usage = self.disk_usage()
+        if usage.free < self.min_free_bytes:
+            self.presence("low_disk", note=f"free disk below configured gate: {usage.free} < {self.min_free_bytes}")
+            return None
+        self.presence("idle")
         response = self.client.json("POST", "/api/v1/lease", {"worker_id": self.worker_id, "runners": sorted(self.runners)})
         lease = response["lease"]
         if lease is None:
@@ -235,6 +301,7 @@ class Worker:
         job = lease["job"]
         token = lease["lease_token"]
         runner_config = self.runners[job["runner"]]
+        self.presence("running", current_job_id=job["job_id"])
         stop = threading.Event()
         heartbeat_error: list[Exception] = []
 
@@ -273,8 +340,19 @@ class Worker:
             except Exception as exc:
                 raise ExecutionUncertain(f"result upload outcome is unknown; verified bundle retained at {bundle}") from exc
             write_json_atomic(run_dir / "host-acceptance.json", result)
+            if self.cleanup_after_upload:
+                receipt = self._safe_cleanup(run_dir, bundle, job, result)
+                result = {**result, "local_cleanup": "completed", "receipt": str(receipt)}
+            try:
+                self.presence("idle")
+            except Exception:
+                pass
             return result
         except ExecutionUncertain as exc:
+            try:
+                self.presence("needs_attention", current_job_id=job["job_id"], note=str(exc))
+            except Exception:
+                pass
             try:
                 self.client.json("POST", f"/api/v1/jobs/{job['job_id']}/attention", {"worker_id": self.worker_id, "lease_token": token, "reason": str(exc)})
             except Exception:
@@ -282,6 +360,10 @@ class Worker:
             raise
         except Exception as exc:
             reason = f"{type(exc).__name__}: {exc}"
+            try:
+                self.presence("needs_attention", current_job_id=job["job_id"], note=reason)
+            except Exception:
+                pass
             if job["runner"] in self.runners and self.runners[job["runner"]].get("type") == "fixed_python" and (run_dir / "logs" / "external-process.json").is_file():
                 uncertain = f"external runner started and later handling failed; state requires inspection: {reason}"
                 try:
@@ -299,11 +381,16 @@ class Worker:
             stop.set()
             thread.join(timeout=2)
 
-    def loop(self, poll_seconds: int = 10) -> None:
-        while True:
+    def loop(self, poll_seconds: int = 10, stop_event: threading.Event | None = None) -> None:
+        stop_event = stop_event or threading.Event()
+        while not stop_event.is_set():
             result = self.once()
             if result is None:
-                time.sleep(poll_seconds)
+                stop_event.wait(poll_seconds)
+        try:
+            self.presence("stopping")
+        except Exception:
+            pass
 
 
 def default_worker_id() -> str:
