@@ -3,7 +3,7 @@
 Bu pilot üç kapıdan oluşur. İlk iki kapı CST açmaz ve hiçbir simülasyon dosyasını silmez.
 
 1. `rf-sim probe --config C:\RFSimWorker\worker.toml` kurulu CST sürümünü, Python API dizinini ve boş alanı okur.
-2. Mock iş hosta bağlanır, küçük sonuç paketini yükler ve hosttaki SHA-256 doğrulamasını sınar. Host ekranında istemci çevrimiçi görünmelidir.
+2. **İşçiyi başlat** ile çalışan mock iş hosta bağlanır, küçük sonuç paketini yükler ve hosttaki SHA-256 doğrulamasını sınar. **Bağlantıyı test et** yalnız tek seferlik kayıt gönderir ve işi başlatmaz. Host ekranında istemci, işçi döngüsü çalışırken çevrimiçi görünmelidir.
 3. Yalnız bundan sonra `gpu=false`, global 32 ağ ve en fazla 20 dakika sınırıyla tek CST 2025 işi çalıştırılır. CST 2026'da üretilmiş bir proje dosyası CST 2025'e geri açılmaya çalışılmaz; model CST 2025 içinde sabit Python kaynakları ve üretilen VBA ile yeniden kurulur.
 
 Mevcut donmuş kaynaklar 2026 API yolunu ve sürüm kaydını sabit içeriyorsa doğrudan çalıştırılmaz. `scripts/prepare-portable-cst-source.py` bunları yeni ve değişmez bir kaynak sürümüne türetir; yerel API yolunu `CST_PYTHON_LIBRARIES`, kaydedilen sürümü `CST_EXPECTED_VERSION` üzerinden alır ve bütün kaynak karmalarını yeniden üretir. `scripts/prepare-cst-runner.ps1` bağdaştırıcı ile yeni manifest karmalarını verir. Bu işlem kaynak uyumluluğunu kanıtlamaz; yanlış 2026 kaydıyla 2025 sonucu yayımlanmasını önler ve gerçek pilotun izlenebilir olmasını sağlar.

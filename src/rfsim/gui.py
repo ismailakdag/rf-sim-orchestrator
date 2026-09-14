@@ -56,7 +56,14 @@ class WorkerGui:
 
     def test(self):
         self.status.set("Host bağlantısı ve yetenek bildirimi sınanıyor…")
-        self._background(lambda: "Bağlantı başarılı; istemci host üzerinde çevrimiçi görünüyor." if self.worker.presence("idle").get("accepted") else "Host yanıtı doğrulanamadı.")
+        self._background(
+            lambda: (
+                "Bağlantı başarılı; tek seferlik istemci kaydı gönderildi. "
+                "Kuyruktaki işi almak için ‘İşçiyi başlat’ düğmesine basın."
+                if self.worker.presence("idle").get("accepted")
+                else "Host yanıtı doğrulanamadı."
+            )
+        )
 
     def start(self):
         if self.thread and self.thread.is_alive():

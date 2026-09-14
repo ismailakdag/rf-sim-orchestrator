@@ -70,7 +70,7 @@ $env:RF_SIM_TOKEN = "HOST-ILE-AYNI-UZUN-BELIRTEC"
 C:\RFSimWorker\RF-Sim-Okul-Istemcisi.cmd
 ```
 
-GUI bağlantıyı sınar, istemciyi başlatır ve çalışan işi kesmeden güvenli durdurma ister. Host bilgisayarında `rf-sim monitor-gui --url https://HOST-ADRESI` ile istemcilerin çevrimiçi durumu, boş diski, CST sürümü ve etkin işi izlenebilir. Aynı bilgi `rf-sim workers --url ...` ile JSON olarak alınır. `rf-sim probe --config ...` hosta bağlanmadan CST kurulumunu ve disk kapısını denetler.
+GUI'deki **Bağlantıyı test et** düğmesi yalnız tek seferlik erişim ve yetenek kaydı gönderir; kuyruktan iş almaz ve sürekli çevrimiçi kalmaz. Kuyruktaki işi almak için **İşçiyi başlat** düğmesine basılır. İstemci çalışan işi kesmeden güvenli durdurma ister. Host bilgisayarında `rf-sim monitor-gui --url https://HOST-ADRESI` ile istemcilerin çevrimiçi durumu, boş diski, CST sürümü ve etkin işi izlenebilir. Aynı bilgi `rf-sim workers --url ...` ile JSON olarak alınır. `rf-sim probe --config ...` hosta bağlanmadan CST kurulumunu ve disk kapısını denetler.
 
 İşçi yalnız dışarı doğru HTTP(S) isteği gönderdiği için okul bilgisayarında gelen bağlantı açılması gerekmez. Ancak ana bilgisayar URL'sinin okul ağından erişilebilir olması gerekir; Python betikleri NAT'ı kendiliğinden aşmaz. Bu sürümün büyük sonuç yüklemesi doğrudan HTTP(S) bağlantısı kurar ve kurumsal proxy üzerinden çalışmayı desteklemez. Proxy gerekiyorsa yükleme istemcisi ayrıca geliştirilip sınanmalıdır. Bu depo proxy kurmaz veya gerçek okul bağlantısını denemez.
 
