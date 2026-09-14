@@ -133,7 +133,7 @@ def command_worker_gui(args) -> None:
 
 def command_monitor_gui(args) -> None:
     from .gui import run_monitor_gui
-    run_monitor_gui(args.url, token_from(args))
+    run_monitor_gui(args.url, token_from(args), args.local_current)
 
 
 def command_results(args) -> None:
@@ -224,6 +224,7 @@ def parser() -> argparse.ArgumentParser:
     monitor_gui = sub.add_parser("monitor-gui", help="open the host worker/job monitor")
     monitor_gui.add_argument("--url", required=True)
     monitor_gui.add_argument("--token")
+    monitor_gui.add_argument("--local-current", help="local Python campaign CURRENT.json to monitor read-only")
     monitor_gui.set_defaults(func=command_monitor_gui)
     wol = sub.add_parser("wol", help="send one Wake-on-LAN magic packet")
     wol.add_argument("--mac", required=True)

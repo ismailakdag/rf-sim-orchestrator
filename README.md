@@ -116,6 +116,10 @@ Komut MAC adresini, IPv4 broadcast adresini ve portu doğrulayıp tek bir magic 
 
 ## Geliştirme ve test
 
+Yerel CST kuyruğu ve tüm uzak bilgisayarları aynı pencerede izlemek için
+[bilgisayar izleme panelini](docs/host-monitor-tr.md) kullanın. Panel yeni
+işçileri otomatik listeler; yenilemek için ajan/model çağrısı gerekmez.
+
 ```powershell
 py -3.11 -m unittest discover -s tests -v
 ```

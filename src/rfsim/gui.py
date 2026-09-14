@@ -107,51 +107,12 @@ class WorkerGui:
         self.root.destroy()
 
 
-class MonitorGui:
-    def __init__(self, root: tk.Tk, url: str, token: str):
-        from .worker import ApiClient
-        self.root, self.client = root, ApiClient(url, token)
-        self.refresh_after = None
-        root.title("RF Sim — Host İzleme")
-        frame = ttk.Frame(root, padding=12); frame.grid(sticky="nsew")
-        ttk.Label(frame, text="RF simülasyon ağı", font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w")
-        self.tree = ttk.Treeview(frame, columns=("durum", "son", "disk", "iş", "cst"), show="headings", height=10)
-        for key, title, width in (("durum","Durum",90),("son","Son sinyal",170),("disk","Boş alan",90),("iş","Etkin iş",150),("cst","CST",100)):
-            self.tree.heading(key, text=title); self.tree.column(key, width=width)
-        self.tree.grid(row=1, column=0, sticky="nsew", pady=8)
-        ttk.Button(frame, text="Yenile", command=self.refresh).grid(row=2, column=0, sticky="e")
-        self.refresh()
-
-    def refresh(self):
-        if self.refresh_after is not None:
-            self.root.after_cancel(self.refresh_after)
-            self.refresh_after = None
-        def fetch():
-            try:
-                data = self.client.json("GET", "/api/v1/workers")
-                self.root.after(0, lambda: self.render(data))
-            except Exception as exc:
-                self.root.after(0, lambda: self.failed(str(exc)))
-        threading.Thread(target=fetch, daemon=True).start()
-
-    def failed(self, message: str):
-        messagebox.showerror("RF Sim", message)
-        self.refresh_after = self.root.after(15000, self.refresh)
-
-    def render(self, data: dict):
-        self.tree.delete(*self.tree.get_children())
-        for worker in data.get("workers", []):
-            installs = worker.get("capabilities", {}).get("cst_installations", [])
-            cst = ", ".join(str(x.get("major") or "?") for x in installs) or "yok"
-            disk = "—" if worker.get("free_bytes") is None else f"{worker['free_bytes']/1024**3:.1f} GB"
-            state = worker["state"] if worker.get("online") else "çevrimdışı"
-            self.tree.insert("", "end", values=(state, worker["last_seen_utc"], disk, worker.get("current_job_id") or "—", cst))
-        self.refresh_after = self.root.after(15000, self.refresh)
+from .monitor_gui import MonitorGui
 
 
 def run_worker_gui(config_path: str, token: str | None = None) -> None:
     root = tk.Tk(); WorkerGui(root, config_path, token); root.mainloop()
 
 
-def run_monitor_gui(url: str, token: str) -> None:
-    root = tk.Tk(); MonitorGui(root, url, token); root.mainloop()
+def run_monitor_gui(url: str, token: str, local_current: str | None = None) -> None:
+    root = tk.Tk(); MonitorGui(root, url, token, local_current); root.mainloop()
