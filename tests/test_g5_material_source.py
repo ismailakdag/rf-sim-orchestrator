@@ -26,8 +26,10 @@ class G5MaterialSourceTest(unittest.TestCase):
 
     def test_cst2025_sampling_is_compatible(self):
         previous = os.environ.get("CST_EXPECTED_VERSION")
+        previous_libraries = os.environ.get("CST_PYTHON_LIBRARIES")
         try:
             os.environ["CST_EXPECTED_VERSION"] = "2025"
+            os.environ["CST_PYTHON_LIBRARIES"] = str(SOURCE)
             spec = importlib.util.spec_from_file_location("g5_material_night_case", SOURCE / "night_case.py")
             module = importlib.util.module_from_spec(spec)
             assert spec.loader is not None
@@ -40,6 +42,10 @@ class G5MaterialSourceTest(unittest.TestCase):
                 os.environ.pop("CST_EXPECTED_VERSION", None)
             else:
                 os.environ["CST_EXPECTED_VERSION"] = previous
+            if previous_libraries is None:
+                os.environ.pop("CST_PYTHON_LIBRARIES", None)
+            else:
+                os.environ["CST_PYTHON_LIBRARIES"] = previous_libraries
 
 
 if __name__ == "__main__":
