@@ -1,0 +1,19 @@
+{
+  "source_version": "fr4-g5-material-cst2025-v2",
+  "derived_from": {
+    "source_version": "fr4-g5-fixtured-loop-v2",
+    "manifest_sha256": "156c1f3dce48a0788141c03ea37c7771459f4a545bf21707bd8d50720637c607"
+  },
+  "cst2025_change": "Use the administrator-selected CST API, omit unsupported FrequencySampleRuleLin while retaining 4001 samples, report the selected release, and force CPU in pinned cases.",
+  "sha256": {
+    "base_geometry.py": "3227f8900258d28183d8933037ae300ae1338f1189caab19191d460c57ac95ac",
+    "case-catalog.json": "70930e00f69e89947c22c8c78dd9cd8f7834f2be8e785c73f8efddd6e2cc25e1",
+    "cst_lesion_check.py": "b4ab5a75f19015e364c27ab79cb6437695b8014d8813ce3107d9646be2950cea",
+    "failure_notes.py": "258d1f481636f85b3bbff560d1e4bbb82248c68b33b49efba546a0f8ecc447fa",
+    "night_case.py": "605f1cc0581a9a06df2ee932b96119474c10242f872666a5e5840677311b033a",
+    "overnight_geometry.py": "8335727e1d0c4553c9f699e1a8699e3823b4692a018b00b7795de342de7f2346",
+    "pair_gate.py": "e268edbba1e1bb947849b9e54e266c8974e124e83b43d5e1de46e7678297de8c",
+    "safety_probe.py": "6306a68bf4bebc4893c65c0ed50255181e734a50250037a2f755b5a2b14eda5b",
+    "serial_queue.py": "dd1af06f5f950ccc8b466035d7ebfdd3edf55b2bdeeae17760109117e0f36fa7"
+  }
+}

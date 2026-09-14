@@ -11,7 +11,7 @@ $target = [System.IO.Path]::GetFullPath($InstallDir)
 $config = Join-Path $target "worker.toml"
 $venvPython = Join-Path $target "venv\Scripts\python.exe"
 $adapter = Join-Path $repo "adapters\candidate_local_metal_v2.py"
-$source = Join-Path $repo "pilot\school-g5-material-cst2025-v1\source"
+$source = Join-Path $repo "pilot\school-g5-material-cst2025-v2\source"
 $manifestPath = Join-Path $source "source-manifest.json"
 $caseCatalog = Join-Path $source "case-catalog.json"
 
@@ -97,7 +97,7 @@ cst_roots = ["$(TomlValue $cstRootToml)"]
 type = "mock"
 max_mock_delay_seconds = 5
 
-[runners.cst-g5-material-cst2025-v1]
+[runners.cst-g5-material-cst2025-v2]
 type = "fixed_python"
 python = "$(TomlValue $pythonToml)"
 script = "$(TomlValue $adapterToml)"
@@ -108,7 +108,7 @@ expected_cst_major = 2025
 timeout_seconds = 1200
 arguments = ["{job_file}", "{run_dir}", "--source-root", "$(TomlValue $sourceToml)", "--case-catalog", "case-catalog.json", "--compact"]
 
-[runners.cst-g5-material-cst2025-v1.parameter_schema.case_id]
+[runners.cst-g5-material-cst2025-v2.parameter_schema.case_id]
 type = "string"
 required = true
 enum = [$caseIdToml]

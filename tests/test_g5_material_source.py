@@ -9,13 +9,13 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "pilot/school-g5-material-cst2025-v1/source"
+SOURCE = ROOT / "pilot/school-g5-material-cst2025-v2/source"
 
 
 class G5MaterialSourceTest(unittest.TestCase):
     def test_manifest_and_catalog_are_frozen(self):
         manifest = json.loads((SOURCE / "source-manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["source_version"], "fr4-g5-material-cst2025-v1")
+        self.assertEqual(manifest["source_version"], "fr4-g5-material-cst2025-v2")
         for name, expected in manifest["sha256"].items():
             path = SOURCE / name
             self.assertTrue(path.is_file())
