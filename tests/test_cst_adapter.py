@@ -50,6 +50,41 @@ raise SystemExit(0)
 
 
 class CstAdapterOfflineContractTest(unittest.TestCase):
+    def test_pinned_case_template_allows_only_exact_case_id(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "frozen-source"
+            source.mkdir()
+            night_case = source / "night_case.py"
+            night_case.write_text(FAKE_NIGHT_CASE, encoding="utf-8")
+            template = source / "pilot-case.json"
+            template.write_text(json.dumps({"case_id": "fixed-pilot", "legacy_job": {"role": "same_material_insert"}}), encoding="utf-8")
+            hashes = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in (night_case, template)}
+            source_manifest = source / "source-manifest.json"
+            source_manifest.write_text(json.dumps({"source_version": "pilot-v1", "sha256": hashes}), encoding="utf-8")
+            source_hash = hashlib.sha256(source_manifest.read_bytes()).hexdigest()
+            deadline = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+
+            def execute(run_dir: Path, case_id: str):
+                run_dir.mkdir()
+                job = {
+                    "schema_version": 1, "job_id": run_dir.name, "study_id": "tooth-sensor",
+                    "runner": "cst-pilot", "source": {"version": "pilot-v1", "sha256": source_hash},
+                    "parameters": {"case_id": case_id}, "deadline_utc": deadline,
+                }
+                job_file = run_dir / "job.json"
+                job_file.write_text(json.dumps(job), encoding="utf-8")
+                return subprocess.run(
+                    [sys.executable, str(ADAPTER), str(job_file), str(run_dir), "--source-root", str(source), "--case-template", "pilot-case.json"],
+                    cwd=ROOT, capture_output=True, text=True, timeout=10,
+                )
+
+            accepted = execute(temp / "accepted", "fixed-pilot")
+            self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+            rejected = execute(temp / "rejected", "operator-changed")
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("exact pinned case template", rejected.stdout + rejected.stderr)
+
     def test_t00009_shaped_job_preserves_raw_archive_and_builds_compact_views(self):
         with tempfile.TemporaryDirectory() as temp_name:
             temp = Path(temp_name)

@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "case_id": "widefield-compact-M01-near-control-global32",
+  "description": "CST 2025 CPU cross-version pilot of the completed compact wide-field M01 near control case.",
+  "derived_from_job": "20260914-fr4-widefield-txrx-v1/b00001",
+  "changes_from_source_job": {
+    "gpu": "true to false",
+    "deadline/archive/work/id": "owned by orchestrator adapter"
+  },
+  "legacy_job": {
+    "phase": "widefield_two_port_txrx_preflight",
+    "role": "same_material_insert",
+    "group_id": "widefield-v1-compact",
+    "pair_id": "widefield-v1-compact-M01_nominal-near",
+    "geometry_id": "widefield-v1-compact-M01_nominal-near",
+    "evidence_domain": "synthetic",
+    "params": {
+      "topology": "hilbert_split_ring",
+      "substrate_h_mm": 1.6,
+      "substrate_epsilon_r": 4.3,
+      "substrate_tand": 0.025,
+      "copper_t_mm": 0.035,
+      "feed_width_mm": null,
+      "include_resonators": false,
+      "include_fixture": false,
+      "include_counterface": false,
+      "include_widefield_frame": true,
+      "frame_bar_mm": 1.4,
+      "support_clearance_mm": 0.2,
+      "tooth_scale": 1.0,
+      "tooth_offset_x_mm": 0.0,
+      "tooth_offset_y_mm": 0.0,
+      "tilt_x_deg": 0.0,
+      "tilt_y_deg": 0.0,
+      "airgap_mm": 0.2,
+      "inclusion_site": "near",
+      "lesion_radius_mm": 0.5,
+      "lesion_depth_mm": 0.2,
+      "lesion_epsilon_r": 10.0,
+      "lesion_sigma_S_per_m": 0.1,
+      "widefield_gap_mm": 0.5,
+      "crown_scale_x": 1.0,
+      "crown_scale_y": 1.0,
+      "cusp_scale": 1.0,
+      "root_width_scale": 1.0,
+      "root_length_scale": 1.0,
+      "widefield_board_x_mm": 20.0,
+      "widefield_board_z_mm": 15.0,
+      "widefield_span_x_mm": 14.0,
+      "widefield_outer_z_mm": 10.0,
+      "widefield_throat_z_mm": 1.5,
+      "widefield_port_gap_mm": 1.0,
+      "widefield_steps": 6
+    },
+    "mesh": 32,
+    "gpu": false,
+    "accuracy_dB": -60,
+    "number_of_pulse_widths": 100,
+    "timeout_seconds": 1200,
+    "capture_view": true,
+    "material_provenance": {
+      "substrate_h_mm": "user supplied: 1.6 mm FR-4",
+      "FR4": "FR-4 proxy inherited from the CST 2026 study: er4.3, tanD0.025; board batch is unmeasured",
+      "copper": "annealed-copper proxy, 5.8e7 S/m and 35 µm thickness",
+      "PLA": "assumed er2.7 and tanD0.01; printed density and anisotropy are unmeasured",
+      "tooth": "analytic layered surrogate with common-topology 0.50 mm-radius internal sphere"
+    },
+    "fixture": {
+      "included": true,
+      "material": "PLA_ASSUMED",
+      "scope": "Four board-spacing rails, two shelf wings and a lower tooth-support plate.",
+      "print_status": "CST electromagnetic concept only; STL and print-fit remain unverified"
+    },
+    "common_topology": {
+      "sites_present": [
+        "near",
+        "left",
+        "right",
+        "far"
+      ],
+      "selected_site": "near",
+      "purpose": "Equal-geometry control/contrast pair; only selected sphere material changes."
+    },
+    "counterface": {
+      "included": false,
+      "scope": "No passive loop and no third port."
+    },
+    "morphology": {
+      "id": "M01_nominal",
+      "crown_scale_x": 1.0,
+      "crown_scale_y": 1.0,
+      "cusp_scale": 1.0,
+      "root_width_scale": 1.0,
+      "root_length_scale": 1.0,
+      "provenance": "bounded synthetic morphology, not scan-derived anatomy"
+    },
+    "lesion_size": {
+      "radius_mm": 0.5,
+      "target_volume_mm3": 0.5235987755982988,
+      "scope": "Largest previously validated internal contrast that remains inside all selected morphologies."
+    },
+    "widefield_txrx": {
+      "included": true,
+      "ports": 2,
+      "port_assignment": {
+        "tx_bowtie": 1,
+        "rx_bowtie": 2
+      },
+      "variant": "compact",
+      "primary_analysis_band_GHz": [
+        1.0,
+        4.5
+      ],
+      "widefield_board_x_mm": 20.0,
+      "widefield_board_z_mm": 15.0,
+      "widefield_span_x_mm": 14.0,
+      "widefield_outer_z_mm": 10.0,
+      "widefield_throat_z_mm": 1.5,
+      "widefield_port_gap_mm": 1.0,
+      "widefield_steps": 6
+    }
+  }
+}

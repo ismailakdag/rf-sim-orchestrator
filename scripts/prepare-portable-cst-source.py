@@ -42,7 +42,7 @@ def main() -> int:
     if "import os\n" not in night:
         night = replace_once(night, "import json\n", "import json\nimport os\n", "night_case import insertion point")
     old_version = manifest.get("source_version")
-    night = replace_once(night, 'CST_LIBS = r"E:\\CST Studio Suite 2026\\AMD64\\python_cst_libraries"', 'CST_LIBS = os.environ.get("CST_PYTHON_LIBRARIES", r"E:\\CST Studio Suite 2026\\AMD64\\python_cst_libraries")', "CST library assignment")
+    night = replace_once(night, 'CST_LIBS = r"E:\\CST Studio Suite 2026\\AMD64\\python_cst_libraries"', 'CST_LIBS = os.environ.get("CST_PYTHON_LIBRARIES")\nif not CST_LIBS:\n    raise RuntimeError("CST_PYTHON_LIBRARIES must select the locally approved CST Python API")', "CST library assignment")
     night = replace_once(night, '"version": "2026"', '"version": os.environ.get("CST_EXPECTED_VERSION", "unreported")', "simulator version field")
     if old_version:
         night = replace_once(night, f'record["source_version"] = "{old_version}"', f'record["source_version"] = "{args.source_version}"', "source version field")
@@ -53,7 +53,7 @@ def main() -> int:
     if safety_path.is_file():
         safety = safety_path.read_text(encoding="utf-8")
         safety = replace_once(safety, "import json,sys,psutil", "import json,os,sys,psutil", "safety_probe import line")
-        safety = replace_once(safety, "sys.path.insert(0,r'E:\\CST Studio Suite 2026\\AMD64\\python_cst_libraries')", "sys.path.insert(0,os.environ.get('CST_PYTHON_LIBRARIES',r'E:\\CST Studio Suite 2026\\AMD64\\python_cst_libraries'))", "safety_probe CST path")
+        safety = replace_once(safety, "sys.path.insert(0,r'E:\\CST Studio Suite 2026\\AMD64\\python_cst_libraries')", "libraries=os.environ.get('CST_PYTHON_LIBRARIES')\n    if not libraries:raise RuntimeError('CST_PYTHON_LIBRARIES is not configured')\n    sys.path.insert(0,libraries)", "safety_probe CST path")
         safety_path.write_text(safety, encoding="utf-8", newline="\n")
 
     files = {path.relative_to(destination).as_posix(): digest(path) for path in sorted(destination.rglob("*")) if path.is_file() and path.name != "source-manifest.json"}

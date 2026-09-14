@@ -114,6 +114,7 @@ def main() -> int:
     parser.add_argument("job_file", type=Path)
     parser.add_argument("run_dir", type=Path)
     parser.add_argument("--source-root", type=Path, required=True)
+    parser.add_argument("--case-template", help="manifest-pinned JSON template selected by an exact case_id")
     parser.add_argument("--compact", action="store_true", help="retain reproducible evidence and remove bulky local CST work after validation")
     args = parser.parse_args()
     # Resolve both sides before recording relative paths: Windows may supply a
@@ -141,7 +142,21 @@ def main() -> int:
 
     raw_archive = run_dir / "source" / "cst-archive"
     raw_work = run_dir / "model" / "cst-work"
-    legacy = dict(job["parameters"])
+    if args.case_template:
+        template_path = safe_source(source_root, args.case_template)
+        template = json.loads(template_path.read_text(encoding="utf-8"))
+        case_id = template.get("case_id")
+        if not isinstance(case_id, str) or job.get("parameters") != {"case_id": case_id}:
+            raise RuntimeError("remote job does not select the exact pinned case template")
+        legacy = template.get("legacy_job")
+        if not isinstance(legacy, dict):
+            raise RuntimeError("pinned case template has no legacy_job object")
+        legacy = dict(legacy)
+    else:
+        legacy = dict(job["parameters"])
+    forbidden = {"id", "deadline_utc", "archive", "work"} & set(legacy)
+    if forbidden:
+        raise RuntimeError(f"case parameters contain adapter-owned fields: {sorted(forbidden)}")
     legacy.update({"id": job["job_id"], "deadline_utc": job["deadline_utc"], "archive": str(raw_archive), "work": str(raw_work)})
     legacy_job = run_dir / "legacy-job.json"
     legacy_job.write_text(json.dumps(legacy, ensure_ascii=False, indent=2), encoding="utf-8")
