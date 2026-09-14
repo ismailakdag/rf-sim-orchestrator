@@ -48,6 +48,15 @@ class LeaseSafetyTests(unittest.TestCase):
             self.assertIsNotNone(store.lease("school-pc", ["mock-v1"]))
             self.assertIsNone(store.lease("school-pc", ["mock-v1"]))
 
+    def test_required_worker_affinity_skips_other_workers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Store(Path(temp), 60, {"mock-v1"}, 1_000_000, 2_000_000)
+            pinned = job("school-only")
+            pinned["metadata"] = {"required_worker_id": "school-pc"}
+            store.submit(pinned)
+            self.assertIsNone(store.lease("local-pc", ["mock-v1"]))
+            self.assertEqual(store.lease("school-pc", ["mock-v1"])["job"]["job_id"], "school-only")
+
     def test_initial_lease_never_exceeds_job_deadline(self):
         with tempfile.TemporaryDirectory() as temp:
             deadline = future(seconds=30)

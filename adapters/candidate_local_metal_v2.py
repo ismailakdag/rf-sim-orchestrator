@@ -117,6 +117,7 @@ def main() -> int:
     parser.add_argument("run_dir", type=Path)
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--case-template", help="manifest-pinned JSON template selected by an exact case_id")
+    parser.add_argument("--case-catalog", help="manifest-pinned JSON catalog selected by an exact case_id")
     parser.add_argument("--compact", action="store_true", help="retain reproducible evidence and remove bulky local CST work after validation")
     args = parser.parse_args()
     # Resolve both sides before recording relative paths: Windows may supply a
@@ -144,7 +145,26 @@ def main() -> int:
 
     raw_archive = run_dir / "source" / "cst-archive"
     raw_work = run_dir / "model" / "cst-work"
-    if args.case_template:
+    if args.case_template and args.case_catalog:
+        raise RuntimeError("select either --case-template or --case-catalog")
+    if args.case_catalog:
+        catalog_path = safe_source(source_root, args.case_catalog)
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        cases = catalog.get("cases")
+        case_id = job.get("parameters", {}).get("case_id")
+        if (
+            not isinstance(cases, dict)
+            or not isinstance(case_id, str)
+            or job.get("parameters") != {"case_id": case_id}
+            or case_id not in cases
+        ):
+            raise RuntimeError("remote job does not select an exact pinned catalog case")
+        entry = cases[case_id]
+        legacy = entry.get("legacy_job") if isinstance(entry, dict) else None
+        if not isinstance(legacy, dict):
+            raise RuntimeError("pinned catalog case has no legacy_job object")
+        legacy = dict(legacy)
+    elif args.case_template:
         template_path = safe_source(source_root, args.case_template)
         template = json.loads(template_path.read_text(encoding="utf-8"))
         case_id = template.get("case_id")

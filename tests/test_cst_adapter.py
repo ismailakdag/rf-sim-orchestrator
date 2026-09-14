@@ -50,6 +50,33 @@ raise SystemExit(0)
 
 
 class CstAdapterOfflineContractTest(unittest.TestCase):
+    def test_pinned_case_catalog_allows_only_listed_case(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source, run_dir = temp / "frozen-source", temp / "accepted"
+            source.mkdir(); run_dir.mkdir()
+            night_case = source / "night_case.py"
+            night_case.write_text(FAKE_NIGHT_CASE, encoding="utf-8")
+            catalog = source / "case-catalog.json"
+            catalog.write_text(json.dumps({"cases": {"case-a": {"legacy_job": {"role": "same_material_insert"}}}}), encoding="utf-8")
+            hashes = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in (night_case, catalog)}
+            manifest = source / "source-manifest.json"
+            manifest.write_text(json.dumps({"source_version": "catalog-v1", "sha256": hashes}), encoding="utf-8")
+            source_hash = hashlib.sha256(manifest.read_bytes()).hexdigest()
+            deadline = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+
+            def execute(target: Path, case_id: str):
+                target.mkdir(exist_ok=True)
+                job = {"schema_version": 1, "job_id": target.name, "study_id": "tooth-sensor", "runner": "cst-catalog", "source": {"version": "catalog-v1", "sha256": source_hash}, "parameters": {"case_id": case_id}, "deadline_utc": deadline}
+                job_file = target / "job.json"; job_file.write_text(json.dumps(job), encoding="utf-8")
+                return subprocess.run([sys.executable, str(ADAPTER), str(job_file), str(target), "--source-root", str(source), "--case-catalog", "case-catalog.json"], cwd=ROOT, capture_output=True, text=True, timeout=10)
+
+            accepted = execute(run_dir, "case-a")
+            self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+            rejected = execute(temp / "rejected", "case-b")
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("exact pinned catalog case", rejected.stdout + rejected.stderr)
+
     def test_pinned_case_template_allows_only_exact_case_id(self):
         with tempfile.TemporaryDirectory() as temp_name:
             temp = Path(temp_name)

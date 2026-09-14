@@ -181,6 +181,9 @@ class Store:
                 document = json.loads(row["document"])
                 if document["runner"] not in runners:
                     continue
+                required_worker_id = document.get("metadata", {}).get("required_worker_id")
+                if required_worker_id is not None and required_worker_id != worker_id:
+                    continue
                 if parse_utc(document["deadline_utc"]) <= now_dt:
                     db.execute("UPDATE jobs SET state='expired',updated_utc=?,note=? WHERE job_id=?", (utc_now(), "deadline passed before lease", row["job_id"]))
                     self._event(db, row["job_id"], "deadline_expired", {})

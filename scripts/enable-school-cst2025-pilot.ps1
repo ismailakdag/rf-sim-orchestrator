@@ -11,11 +11,11 @@ $target = [System.IO.Path]::GetFullPath($InstallDir)
 $config = Join-Path $target "worker.toml"
 $venvPython = Join-Path $target "venv\Scripts\python.exe"
 $adapter = Join-Path $repo "adapters\candidate_local_metal_v2.py"
-$source = Join-Path $repo "pilot\school-widefield-cst2025-v3\source"
+$source = Join-Path $repo "pilot\school-g5-material-cst2025-v1\source"
 $manifestPath = Join-Path $source "source-manifest.json"
-$caseTemplate = Join-Path $source "pilot-case.json"
+$caseCatalog = Join-Path $source "case-catalog.json"
 
-foreach ($required in @($CstExecutable, $venvPython, $adapter, $manifestPath, $caseTemplate)) {
+foreach ($required in @($CstExecutable, $venvPython, $adapter, $manifestPath, $caseCatalog)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Gerekli dosya bulunamadı: $required" }
 }
 $cstRoot = Split-Path -Parent (Resolve-Path -LiteralPath $CstExecutable).Path
@@ -57,9 +57,9 @@ foreach ($property in $manifest.sha256.PSObject.Properties) {
     if ($observed -ne $property.Value) { throw "Kaynak karması uyuşmuyor: $($property.Name)" }
 }
 
-$case = Get-Content -LiteralPath $caseTemplate -Raw | ConvertFrom-Json
-$caseId = [string]$case.case_id
-if (-not $caseId) { throw "Pilot vaka kimliği boş." }
+$catalog = Get-Content -LiteralPath $caseCatalog -Raw | ConvertFrom-Json
+$caseIds = @($catalog.cases.PSObject.Properties.Name | Sort-Object)
+if ($caseIds.Count -eq 0) { throw "Pilot vaka kataloğu boş." }
 $adapterHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $adapter).Hash.ToLowerInvariant()
 $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestPath).Hash.ToLowerInvariant()
 
@@ -69,6 +69,7 @@ function TomlValue([string]$value) {
 function SlashPath([string]$value) {
     return (Resolve-Path -LiteralPath $value).Path.Replace('\', '/')
 }
+$caseIdToml = ($caseIds | ForEach-Object { '"' + (TomlValue $_) + '"' }) -join ", "
 
 New-Item -ItemType Directory -Force -Path $target | Out-Null
 if (Test-Path -LiteralPath $config -PathType Leaf) {
@@ -89,14 +90,14 @@ data_dir = "$(TomlValue $dataDir)"
 heartbeat_seconds = 30
 poll_seconds = 15
 min_free_gb = 15
-cleanup_after_upload = false
+cleanup_after_upload = true
 cst_roots = ["$(TomlValue $cstRootToml)"]
 
 [runners.mock-v1]
 type = "mock"
 max_mock_delay_seconds = 5
 
-[runners.cst-widefield-cst2025-pilot-v3]
+[runners.cst-g5-material-cst2025-v1]
 type = "fixed_python"
 python = "$(TomlValue $pythonToml)"
 script = "$(TomlValue $adapterToml)"
@@ -105,12 +106,12 @@ source_sha256 = "$sourceHash"
 cst_python_libraries = "$(TomlValue $cstLibrariesToml)"
 expected_cst_major = 2025
 timeout_seconds = 1200
-arguments = ["{job_file}", "{run_dir}", "--source-root", "$(TomlValue $sourceToml)", "--case-template", "pilot-case.json"]
+arguments = ["{job_file}", "{run_dir}", "--source-root", "$(TomlValue $sourceToml)", "--case-catalog", "case-catalog.json", "--compact"]
 
-[runners.cst-widefield-cst2025-pilot-v3.parameter_schema.case_id]
+[runners.cst-g5-material-cst2025-v1.parameter_schema.case_id]
 type = "string"
 required = true
-enum = ["$(TomlValue $caseId)"]
+enum = [$caseIdToml]
 "@
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($config, $configText, $utf8NoBom)
@@ -125,4 +126,4 @@ pause
 Write-Host "Pilot yapılandırması hazır. CST ve kaynak denetimi:" -ForegroundColor Green
 & $venvPython -m rfsim probe --config $config
 if ($LASTEXITCODE -ne 0) { throw "Yerel probe başarısız oldu." }
-Write-Host "Temizlik kapalıdır. GUI: $launcher" -ForegroundColor Green
+Write-Host "Doğrulanmış yüklemeden sonra yalnız işçiye ait geçici CST verisi temizlenir. GUI: $launcher" -ForegroundColor Green

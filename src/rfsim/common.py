@@ -95,6 +95,11 @@ def validate_job(document: dict[str, Any], allowed_runners: set[str] | None = No
         raise ValidationError("priority must be an integer from -100 to 100")
     if not isinstance(document.get("metadata", {}), dict):
         raise ValidationError("metadata must be an object")
+    required_worker_id = document.get("metadata", {}).get("required_worker_id")
+    if required_worker_id is not None and (
+        not isinstance(required_worker_id, str) or not JOB_ID_RE.fullmatch(required_worker_id)
+    ):
+        raise ValidationError("metadata.required_worker_id must be a valid non-empty worker ID")
     return {**document, "priority": priority, "metadata": document.get("metadata", {})}
 
 

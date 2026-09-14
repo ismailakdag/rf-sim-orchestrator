@@ -93,6 +93,25 @@ class ValidationTests(unittest.TestCase):
             self.assertIsNone(store.lease("same-school-pc", ["mock-v1"]))
             self.assertIsNotNone(store.lease("different-school-pc", ["mock-v1"]))
 
+    def test_job_can_be_pinned_to_one_worker(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Store(Path(temp), 60, {"mock-v1"}, 10_000_000, 20_000_000)
+            pinned = job("pinned")
+            pinned["metadata"] = {"required_worker_id": "school-pc"}
+            store.submit(pinned)
+            self.assertIsNone(store.lease("local-pc", ["mock-v1"]))
+            lease = store.lease("school-pc", ["mock-v1"])
+            self.assertIsNotNone(lease)
+            self.assertEqual(lease["job"]["job_id"], "pinned")
+
+    def test_required_worker_id_is_validated(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Store(Path(temp), 60, {"mock-v1"}, 10_000_000, 20_000_000)
+            invalid = job("bad-worker")
+            invalid["metadata"] = {"required_worker_id": ""}
+            with self.assertRaises(ValidationError):
+                store.submit(invalid)
+
     def test_archive_path_traversal_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "bad.zip"
