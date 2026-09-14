@@ -9,13 +9,13 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "pilot/school-g5-material-cst2025-v3/source"
+SOURCE = ROOT / "pilot/school-g5-material-cst2025-v4/source"
 
 
 class G5MaterialSourceTest(unittest.TestCase):
     def test_manifest_and_catalog_are_frozen(self):
         manifest = json.loads((SOURCE / "source-manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["source_version"], "fr4-g5-material-cst2025-v3")
+        self.assertEqual(manifest["source_version"], "fr4-g5-material-cst2025-v4")
         for name, expected in manifest["sha256"].items():
             path = SOURCE / name
             self.assertTrue(path.is_file())
@@ -26,6 +26,7 @@ class G5MaterialSourceTest(unittest.TestCase):
         catalog = json.loads((SOURCE / "case-catalog.json").read_text(encoding="utf-8"))
         self.assertEqual(len(catalog["cases"]), 42)
         self.assertTrue(all(case["legacy_job"]["gpu"] is False for case in catalog["cases"].values()))
+        self.assertTrue(all(case["legacy_job"]["timeout_seconds"] == 2700 for case in catalog["cases"].values()))
 
     def test_cst2025_sampling_is_compatible(self):
         previous = os.environ.get("CST_EXPECTED_VERSION")

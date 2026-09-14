@@ -4,6 +4,8 @@ Güncelleme: 14 Eylül 2026, 21:21 Türkiye saati
 
 Bu belge, mevcut pilotun ardından geliştirilecek ürün kapsamını kaydeder. Aşağıdaki maddeler tamamlanmış özellikler değildir; uygulama ve kabul testleri bitmeden üretim özelliği sayılmaz.
 
+İlk sağlamlaştırma adımı `0.2.4` sürümünde uygulanmıştır: iç CST solver bütçesi ile dış gözetmen sınırı arasında kapanış payı bulunur; işçi görünür Abort ve License pencerelerini otomatik tıklamadan heartbeat durumuna taşır. Genel proje yükleme, sürüm seçimi ve çoklu bilgisayar arayüzü hâlâ aşağıdaki yol haritasındadır.
+
 ## Hedef kullanım
 
 Kullanıcı, host arayüzünden bir CST işi seçebilmeli veya kendi CST proje paketini yükleyebilmeli. Host yalnız uygun ve boş bir işçiye değişmez işi vermeli. İşçi doğru CST sürümünü seçmeli, aynı anda tek solver çalıştırmalı, yaşam döngüsünü kaydetmeli, doğrulanmış sonucu hosta yüklemeli ve kabul makbuzundan sonra geçici çalışma verisini temizlemelidir.

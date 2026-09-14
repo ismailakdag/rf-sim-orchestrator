@@ -6,6 +6,8 @@
 
 İşçi, üst Python süreci ile PID 4144 ve altındaki CST/solver süreçlerinin birlikte kapandığını kanıtlayamadığı için bunları otomatik sonlandırmadı ve işi otomatik yeniden sıraya almadı. Okul bilgisayarında etkin CST/solver kalıp kalmadığı ve yerel iş günlüğü denetlenmeden yeni iş başlatılmaz. Bu kayıt bilimsel sonuç değildir; süreç yaşam döngüsü ve süre sınırı iyileştirmesi için operasyon kanıtıdır.
 
+Sorunun nedeni, CST içindeki 1.200 saniyelik vaka sınırı ile dış Python gözetmeninin 1.200 saniyelik sınırının aynı anda dolmasıdır. İç betik `abort_solver` çağrısıyla kullanıcı onayı bekleyen Abort penceresini açarken dış gözetmen de belirsiz duruma geçti. `v4` düzeltmesinde okul CPU solver bütçesi 2.700 saniyeye çıkarıldı ve dış gözetmene ek 300 saniye kapanış payı verildi. İşçi ayrıca görünür CST Abort ve License pencerelerini tıklamadan algılayıp heartbeat aşamasında `interaction_required` olarak bildirir. Köprü geçse bile keşfedilen okul hızına göre kalan 40 iş ayrıca serbest bırakılmadan başlamaz.
+
 ## 14 Eylül 2026 gerçek CST 2025 pilot sonucu
 
 `school-cst2025-widefield-20260914-165341` işi okul bilgisayarında CST 2025 ve CPU ile tamamlandı. İş 19:54:28 Türkiye saatinde başladı; solver 19:54:36–19:56:49 arasında 132,141 saniye çalıştı ve bütün iş 145 saniye sürdü. Host 19:56:56'da 613 dosyalı, 9.401.720 baytlık paketi `4b212dd3088ad50e6696f9b68ab610215e0276e22915f4f6c2c920b47ca7d64c` SHA-256 karmasıyla doğruladı. Sonuç tekrar indirilip aynı karma ile denetlendi. Enerji kriteri, pasiflik, proje kapanışı ve 4.001 sonlu kompleks örnek denetimleri geçti.

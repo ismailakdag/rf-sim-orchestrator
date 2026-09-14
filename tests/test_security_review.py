@@ -10,6 +10,7 @@ import time
 import unittest
 import warnings
 import zipfile
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -20,7 +21,7 @@ sys.path.insert(0, str(SRC))
 
 from rfsim.common import ValidationError, safe_member_name, sha256_file, validate_job, validate_result_zip
 from rfsim.host import Store
-from rfsim.worker import ExecutionUncertain, _validate_parameter_schema, package_result, run_fixed_python, run_mock
+from rfsim.worker import ExecutionUncertain, _runner_stage, _validate_parameter_schema, package_result, run_fixed_python, run_mock
 
 
 def future(seconds: int = 3_600) -> str:
@@ -258,6 +259,20 @@ class ParameterSafetyTests(unittest.TestCase):
 
 
 class FixedRunnerSafetyTests(unittest.TestCase):
+    def test_runner_stage_reports_solver_elapsed_time(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            heartbeat = root / "model/cst-work/heartbeat.json"
+            heartbeat.parent.mkdir(parents=True)
+            heartbeat.write_text(json.dumps({"state": "solving", "elapsed_seconds": 123.9}), encoding="utf-8")
+            with mock.patch("rfsim.worker._known_cst_dialogs", return_value=[]):
+                self.assertEqual(_runner_stage(root), "solver_running:123s")
+
+    def test_runner_stage_prioritizes_known_dialog(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with mock.patch("rfsim.worker._known_cst_dialogs", return_value=["abort"]):
+                self.assertEqual(_runner_stage(Path(temp)), "interaction_required:abort")
+
     def test_absolute_job_deadline_bounds_external_runner_wait(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

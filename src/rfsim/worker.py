@@ -27,6 +27,70 @@ class ExecutionUncertain(RuntimeError):
     """An external process or transport may have completed despite lost control."""
 
 
+def _known_cst_dialogs() -> list[str]:
+    """Return a small allowlist of visible CST dialogs without interacting with them."""
+    if os.name != "nt":
+        return []
+    try:
+        import ctypes
+        import psutil
+
+        user32 = ctypes.windll.user32
+        titles: set[str] = set()
+        callback_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+        def visit(hwnd, _lparam):
+            if not user32.IsWindowVisible(hwnd):
+                return True
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length <= 0:
+                return True
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buffer, length + 1)
+            title = buffer.value.strip()
+            process_id = ctypes.c_ulong()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(process_id))
+            try:
+                process_name = psutil.Process(process_id.value).name().lower()
+            except (psutil.Error, OSError):
+                return True
+            if "cst" not in process_name and "solver" not in process_name:
+                return True
+            lowered = title.casefold()
+            if "abort" in lowered:
+                titles.add("abort")
+            elif "license" in lowered or "licence" in lowered:
+                titles.add("license")
+            return True
+
+        user32.EnumWindows(callback_type(visit), 0)
+        return sorted(titles)
+    except Exception:
+        return []
+
+
+def _runner_stage(run_dir: Path) -> str:
+    dialogs = _known_cst_dialogs()
+    if dialogs:
+        return ("interaction_required:" + ",".join(dialogs))[:128]
+    heartbeat = run_dir / "model" / "cst-work" / "heartbeat.json"
+    try:
+        progress = json.loads(heartbeat.read_text(encoding="utf-8"))
+        if progress.get("state") == "solving":
+            elapsed = max(0, int(float(progress.get("elapsed_seconds", 0))))
+            return f"solver_running:{elapsed}s"
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        pass
+    record_path = run_dir / "source" / "cst-archive" / "record.json"
+    try:
+        status = str(json.loads(record_path.read_text(encoding="utf-8")).get("status", "")).strip()
+        if status:
+            return ("cst_" + status)[:128]
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        pass
+    return "runner_active"
+
+
 class ApiClient:
     def __init__(self, base_url: str, token: str, timeout: int = 60):
         self.base_url = base_url.rstrip("/")
@@ -220,7 +284,7 @@ def run_fixed_python(job: dict, run_dir: Path, config: dict) -> None:
         try:
             return_code = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired as exc:
-            write_json_atomic(runtime_path, {"pid": process.pid, "started_utc": started_utc, "timeout_seconds": timeout, "state": "timeout_process_state_unknown", "automatic_termination": False})
+            write_json_atomic(runtime_path, {"pid": process.pid, "started_utc": started_utc, "timeout_seconds": timeout, "state": "timeout_process_state_unknown", "automatic_termination": False, "last_observed_stage": _runner_stage(run_dir)})
             raise ExecutionUncertain(f"fixed runner exceeded {timeout:.1f} s; PID {process.pid} and descendants were not terminated automatically") from exc
     write_json_atomic(runtime_path, {"pid": process.pid, "finished_utc": utc_now(), "timeout_seconds": timeout, "state": "exited", "return_code": return_code})
     if return_code:
@@ -304,18 +368,18 @@ class Worker:
         self.presence("running", current_job_id=job["job_id"])
         stop = threading.Event()
         heartbeat_error: list[Exception] = []
+        run_dir = self.root / "runs" / job["job_id"]
 
         def heartbeats():
             while not stop.wait(self.heartbeat_seconds):
                 try:
-                    self.client.json("POST", f"/api/v1/jobs/{job['job_id']}/heartbeat", {"worker_id": self.worker_id, "lease_token": token, "stage": "runner_active"})
+                    self.client.json("POST", f"/api/v1/jobs/{job['job_id']}/heartbeat", {"worker_id": self.worker_id, "lease_token": token, "stage": _runner_stage(run_dir)})
                 except Exception as exc:
                     heartbeat_error.append(exc)
                     return
 
         thread = threading.Thread(target=heartbeats, daemon=True)
         thread.start()
-        run_dir = self.root / "runs" / job["job_id"]
         try:
             if run_dir.exists():
                 raise ValidationError("local immutable run directory already exists; operator review required")

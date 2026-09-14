@@ -24,10 +24,10 @@ from pathlib import Path
 
 import numpy as np
 
-CONTROL_ID = "school-g5-bridge-control-v3-20260914"
-CONTRAST_ID = "school-g5-bridge-contrast-v3-20260914"
-RUNNER = "cst-g5-material-cst2025-v3"
-SOURCE = {"version": "fr4-g5-material-cst2025-v3", "sha256": "32b21f46d00e0e961a456d2bff9906c85c4df02fcfc76facbd9a9650b14435b1"}
+CONTROL_ID = "school-g5-bridge-control-v4-20260914"
+CONTRAST_ID = "school-g5-bridge-contrast-v4-20260914"
+RUNNER = "cst-g5-material-cst2025-v4"
+SOURCE = {"version": "fr4-g5-material-cst2025-v4", "sha256": "eaa48ad2ffcdd0205b71eabfde6235eebfd4b1100cdf561112b78bc4aafdc499"}
 BRIDGE_CASES = {"g5-M01-nominal-near-control", "g5-M01-nominal-near-E16-S018"}
 
 
@@ -119,6 +119,7 @@ def main() -> None:
     parser.add_argument("--work-dir", type=Path, required=True)
     parser.add_argument("--deadline-utc", required=True)
     parser.add_argument("--worker-id", default="OKUL-PC-01")
+    parser.add_argument("--release-remaining", action="store_true", help="submit the remaining catalog only after the bridge passes")
     args = parser.parse_args()
     end = datetime.fromisoformat(args.deadline_utc.replace("Z", "+00:00")).astimezone(timezone.utc)
     work = args.work_dir.resolve(); work.mkdir(parents=True, exist_ok=True)
@@ -155,16 +156,20 @@ def main() -> None:
         state.update(status="bridge_gate_rejected", ended_utc=now()); atomic_json(state_path, state); return
 
     catalog = json.loads(args.catalog.read_text(encoding="utf-8"))["cases"]
+    if not args.release_remaining:
+        state.update(status="bridge_passed_awaiting_release", ended_utc=now(), planned_remaining_jobs=len(set(catalog) - BRIDGE_CASES))
+        atomic_json(state_path, state)
+        return
     submitted = []
     for index, case_id in enumerate(sorted(set(catalog) - BRIDGE_CASES), 1):
         slug = case_id.lower().replace("_", "-")
-        job_id = f"school-g5m3-{index:02d}-{slug}"
+        job_id = f"school-g5m4-{index:02d}-{slug}"
         role = catalog[case_id]["legacy_job"]["role"]
         document = {
             "schema_version": 1, "job_id": job_id, "study_id": "g5-material-sensitivity-v1",
             "runner": RUNNER, "source": SOURCE, "parameters": {"case_id": case_id},
             "deadline_utc": args.deadline_utc, "priority": 80 if role == "same_material_insert" else 50,
-            "metadata": {"required_worker_id": args.worker_id, "campaign": "20260914-g5-material-sensitivity-school-v3", "stage": "material_response_surface", "case_id": case_id},
+            "metadata": {"required_worker_id": args.worker_id, "campaign": "20260914-g5-material-sensitivity-school-v4", "stage": "material_response_surface", "case_id": case_id},
         }
         response = api.json("POST", "/api/v1/jobs", document)
         submitted.append({"job_id": job_id, "case_id": case_id, "document_sha256": response["document_sha256"]})

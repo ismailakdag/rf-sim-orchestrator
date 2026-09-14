@@ -40,8 +40,11 @@ def digest(path: Path) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--study-root", type=Path, required=True)
-    parser.add_argument("--output", type=Path, default=Path("pilot/school-g5-material-cst2025-v3/source"))
+    parser.add_argument("--output", type=Path, default=Path("pilot/school-g5-material-cst2025-v4/source"))
+    parser.add_argument("--case-timeout-seconds", type=int, default=2700)
     args = parser.parse_args()
+    if args.case_timeout_seconds < 300:
+        raise ValueError("case timeout must be at least 300 seconds")
     study = args.study_root.resolve(strict=True)
     source = study / "research/tooth-sensor/fr4-g5-fixtured-loop-v2"
     campaign = study / "research/tooth-sensor/campaigns/20260914-fr4-g5-differential-size-v1"
@@ -78,7 +81,7 @@ def main() -> None:
     text = text.replace(' .FrequencySampleRuleLin "Samples"\n .FrequencySamples "4001"', '{sample_rule.rstrip()}\n .FrequencySamples "4001"', 1)
     text = text.replace('"connect_note": "CST 2026 connect API exposes no per-call timeout; parent process supervises this worker."', '"connect_note": "CST local connect API exposes no per-call timeout; parent process supervises this worker."')
     text = text.replace('{"product": "CST Studio Suite", "version": "2026", "api": "official local Python interface"}', '{"product": "CST Studio Suite", "version": os.environ.get("CST_EXPECTED_VERSION", "unreported"), "api": "official local Python interface"}')
-    text = text.replace('record["source_version"] = "fr4-g5-fixtured-loop-v2"', 'record["source_version"] = "fr4-g5-material-cst2025-v3"')
+    text = text.replace('record["source_version"] = "fr4-g5-fixtured-loop-v2"', 'record["source_version"] = "fr4-g5-material-cst2025-v4"')
     text = text.replace('"evidence": "CST 2026 shipped vba_snippets.py Hex template and Global Mesh Properties Refine help"', '"evidence": "Selected local CST release shipped vba_snippets.py Hex template and Global Mesh Properties Refine help"')
     night_case.write_text(text, encoding="utf-8", newline="\n")
 
@@ -109,7 +112,7 @@ def main() -> None:
                 role=role,
                 gpu=False,
                 capture_view=False,
-                timeout_seconds=1200,
+                timeout_seconds=args.case_timeout_seconds,
             )
             legacy["params"]["lesion_epsilon_r"] = epsilon_r
             legacy["params"]["lesion_sigma_S_per_m"] = sigma
@@ -123,9 +126,9 @@ def main() -> None:
     write(output / "case-catalog.json", {"schema_version": 1, "study_id": "g5-material-sensitivity-v1", "cases": cases})
     hashes = {path.name: digest(path) for path in sorted(output.iterdir()) if path.is_file() and path.name != "source-manifest.json"}
     write(output / "source-manifest.json", {
-        "source_version": "fr4-g5-material-cst2025-v3",
+        "source_version": "fr4-g5-material-cst2025-v4",
         "derived_from": {"source_version": original_manifest["source_version"], "manifest_sha256": digest(source / "source-manifest.json")},
-        "cst2025_change": "Use the administrator-selected CST API, omit unsupported FrequencySampleRuleLin while retaining 4001 samples, report the selected release, and force CPU in pinned cases.",
+        "cst2025_change": "Use the administrator-selected CST API, omit unsupported FrequencySampleRuleLin while retaining 4001 samples, report the selected release, force CPU, and allow a 2700 second CPU solver budget in pinned cases.",
         "sha256": hashes,
     })
     print(json.dumps({"output": str(output), "cases": len(cases), "source_manifest_sha256": digest(output / "source-manifest.json")}))

@@ -11,7 +11,7 @@ $target = [System.IO.Path]::GetFullPath($InstallDir)
 $config = Join-Path $target "worker.toml"
 $venvPython = Join-Path $target "venv\Scripts\python.exe"
 $adapter = Join-Path $repo "adapters\candidate_local_metal_v2.py"
-$repoSource = Join-Path $repo "pilot\school-g5-material-cst2025-v3\source"
+$repoSource = Join-Path $repo "pilot\school-g5-material-cst2025-v4\source"
 $repoManifestPath = Join-Path $repoSource "source-manifest.json"
 $repoCaseCatalog = Join-Path $repoSource "case-catalog.json"
 
@@ -43,7 +43,7 @@ if ($LASTEXITCODE -ne 0) { throw "CST bağımlılıklarının kurulumu başarıs
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 New-Item -ItemType Directory -Force -Path $target | Out-Null
-$source = Join-Path $target "sources\fr4-g5-material-cst2025-v3"
+$source = Join-Path $target "sources\fr4-g5-material-cst2025-v4"
 New-Item -ItemType Directory -Force -Path $source | Out-Null
 $manifest = Get-Content -LiteralPath $repoManifestPath -Raw | ConvertFrom-Json
 if (-not $manifest.sha256) { throw "Kaynak manifestinde sha256 haritası yok." }
@@ -77,6 +77,10 @@ $caseCatalog = Join-Path $source "case-catalog.json"
 $catalog = Get-Content -LiteralPath $caseCatalog -Raw | ConvertFrom-Json
 $caseIds = @($catalog.cases.PSObject.Properties.Name | Sort-Object)
 if ($caseIds.Count -eq 0) { throw "Pilot vaka kataloğu boş." }
+$caseTimeouts = @($catalog.cases.PSObject.Properties | ForEach-Object { [double]$_.Value.legacy_job.timeout_seconds })
+$maximumCaseTimeout = ($caseTimeouts | Measure-Object -Maximum).Maximum
+$supervisorGraceSeconds = 300
+$supervisorTimeoutSeconds = [int][Math]::Ceiling($maximumCaseTimeout + $supervisorGraceSeconds)
 $adapterHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $adapter).Hash.ToLowerInvariant()
 $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestPath).Hash.ToLowerInvariant()
 
@@ -113,7 +117,7 @@ cst_roots = ["$(TomlValue $cstRootToml)"]
 type = "mock"
 max_mock_delay_seconds = 5
 
-[runners.cst-g5-material-cst2025-v3]
+[runners.cst-g5-material-cst2025-v4]
 type = "fixed_python"
 python = "$(TomlValue $pythonToml)"
 script = "$(TomlValue $adapterToml)"
@@ -121,10 +125,10 @@ script_sha256 = "$adapterHash"
 source_sha256 = "$sourceHash"
 cst_python_libraries = "$(TomlValue $cstLibrariesToml)"
 expected_cst_major = 2025
-timeout_seconds = 1200
+timeout_seconds = $supervisorTimeoutSeconds
 arguments = ["{job_file}", "{run_dir}", "--source-root", "$(TomlValue $sourceToml)", "--case-catalog", "case-catalog.json", "--compact"]
 
-[runners.cst-g5-material-cst2025-v3.parameter_schema.case_id]
+[runners.cst-g5-material-cst2025-v4.parameter_schema.case_id]
 type = "string"
 required = true
 enum = [$caseIdToml]
@@ -143,6 +147,9 @@ $tokenFile = Join-Path $target "worker-token.dpapi"
 $backgroundLog = Join-Path $target "background-worker.log"
 $backgroundText = @"
 `$ErrorActionPreference = "Stop"
+`$utf8 = New-Object System.Text.UTF8Encoding(`$false)
+[Console]::OutputEncoding = `$utf8
+`$OutputEncoding = `$utf8
 `$mutex = New-Object Threading.Mutex(`$false, "Local\RFSimWorker-$WorkerId")
 if (-not `$mutex.WaitOne(0)) { exit 23 }
 try {
