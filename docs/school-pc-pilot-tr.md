@@ -1,5 +1,22 @@
 # Okul bilgisayarı pilotu: CST 2025, CPU ve sınırlı disk
 
+## 14 Eylül 2026 gerçek CST 2025 pilot sonucu
+
+`school-cst2025-widefield-20260914-165341` işi okul bilgisayarında CST 2025 ve CPU ile tamamlandı. İş 19:54:28 Türkiye saatinde başladı; solver 19:54:36–19:56:49 arasında 132,141 saniye çalıştı ve bütün iş 145 saniye sürdü. Host 19:56:56'da 613 dosyalı, 9.401.720 baytlık paketi `4b212dd3088ad50e6696f9b68ab610215e0276e22915f4f6c2c920b47ca7d64c` SHA-256 karmasıyla doğruladı. Sonuç tekrar indirilip aynı karma ile denetlendi. Enerji kriteri, pasiflik, proje kapanışı ve 4.001 sonlu kompleks örnek denetimleri geçti.
+
+| Denetim | CST 2025 okul bilgisayarı | CST 2026 yerel `b00001` | Sonuç |
+| --- | ---: | ---: | --- |
+| Solver süresi | 132,141 saniye | 40,000 saniye | Bu örnekte okul bilgisayarı 3,30 kat daha yavaş |
+| Frekans ekseni | 1–6 GHz, 4.001 örnek | 1–6 GHz, 4.001 örnek | Birebir aynı |
+| Mesh hücresi | 493.148 | 493.148 | Aynı |
+| `mesh-grid.bin` karması | `77784e…9017` | `77784e…9017` | Birebir aynı |
+| CST içi sentetik küre hacmi | 0,5235987756 mm³ | 0,5235987756 mm³ | Aynı |
+| Dört S eğrisi kompleks RMS farkı | 0,0004284934 | — | Yerel eğrilerin RMS genliğinin %0,07244'ü |
+
+Fiziksel geometri VBA'sı, GPU satırı ve CST 2025'te desteklenmeyen örnekleme kuralı satırı çıkarıldığında birebir aynıdır. Buna rağmen iki bilgisayar arasındaki mutlak S-matrisi farkı, yerel `b00001`–`b00002` kontrol–kontrast etkisinin dört eğride 26,81 katı, S21'de 13,70 katıdır. Bu sonuç mutlak eğrilerin bilgisayarlar arasında doğrudan havuzlanamayacağını gösterir. Bilimsel paralel çalışma için her kontrol–kontrast çifti aynı bilgisayar ve CST sürümünde tamamlanmalı; okul bilgisayarında `b00002` karşılığının kısa köprü koşusu yapılarak çift içi farkın CST 2026 çiftiyle eşleşmesi sınanmalıdır. Bu ikinci iş otomatik başlatılmadı.
+
+Makine tarafından okunabilir karşılaştırma `school-pilot-cst2025-result-2026-09-14.json`, yeniden üretilebilir analiz `scripts/analyze-school-cst-bridge.py` içindedir. İlk pilot gereği okul bilgisayarındaki ham CST çalışma ağacı temizlenmedi.
+
 ## 14 Eylül 2026 mock sonucu
 
 `OKUL-PC-01`, `school-mock-20260914-01` işini 19:09:40 Türkiye saatinde kiraladı. Dokuz artefakt içeren 2.891 baytlık ZIP paketini 19:09:41'de hosta yükledi. Host paketi `e4bab20e700d67df6daf6331e0bf8f01b7b4a0a7bdf234165b84e13a389c5278` SHA-256 karmasıyla kabul etti; aynı paket hosttan yeniden indirildi ve karma tekrar doğrulandı. Temizlik kapalı kaldı ve CST açılmadı. Makine 29,3 GB boş alan bildirdi.

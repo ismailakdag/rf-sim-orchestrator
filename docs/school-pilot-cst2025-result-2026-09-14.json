@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-09-14T17:05:18.582274Z",
+  "remote_package": {
+    "path": "E:\\rf-sim-orchestrator\\build\\remote-pilot\\downloaded\\school-cst2025-widefield-20260914-165341.zip",
+    "sha256": "4b212dd3088ad50e6696f9b68ab610215e0276e22915f4f6c2c920b47ca7d64c"
+  },
+  "remote": {
+    "job_id": "school-cst2025-widefield-20260914-165341",
+    "simulator": {
+      "product": "CST Studio Suite",
+      "version": "2025",
+      "api": "official local Python interface"
+    },
+    "results_validated": true,
+    "project_closed": true,
+    "energy_criterion_met": true,
+    "solver_state": "SUCCESS",
+    "solver_seconds": 132.14099999999598,
+    "total_seconds": 145.0,
+    "gpu": {
+      "requested": false,
+      "observed": false,
+      "fallback_reason": "disabled_by_job",
+      "evidence_messages": [
+        "Matrix computation (PBA)\n    [Perfect Boundary Approximation (PBA), version: default]\n    [GPU acceleration: off (by user)]\nMore..."
+      ]
+    },
+    "host_package_artifact_count": 613,
+    "cst_verified_artifact_count": 13
+  },
+  "baseline": {
+    "run_id": "b00001",
+    "simulator": {
+      "product": "CST Studio Suite",
+      "version": "2026",
+      "api": "official local Python interface"
+    },
+    "solver_seconds": 40.0,
+    "total_seconds": 57.46899999998277,
+    "gpu": {
+      "requested": true,
+      "observed": true,
+      "fallback_reason": null,
+      "evidence_messages": [
+        "Hardware Accelerator Device info:\n    - The environment variable CST_HWACC_ALLOW_UNVERIFIED_HARDWARE is set to allow all GPUs. Please consider to set CUDA_VISIBLE_DEVICES to limit the available devices.",
+        "Matrix computation (PBA)\n    [Perfect Boundary Approximation (PBA), version: default]\n    [Matrixcalc GPU acceleration: on, # of GPUs: 1]",
+        "Hardware Accelerator Device activated:\n   1 CUDA GPU solver used,\n      type NVIDIA GeForce RTX 3060 card found, GPU memory usage approx. 5 %",
+        "Asynchronous communication is used for GPU Computing.",
+        "Asynchronous communication is used for GPU Computing."
+      ]
+    }
+  },
+  "identity_checks": {
+    "frequency_axis_exact": true,
+    "frequency_samples": 4001,
+    "frequency_range_GHz": [
+      1.0,
+      6.0
+    ],
+    "mesh_cells_remote": 493148,
+    "mesh_cells_baseline": 493148,
+    "mesh_grid_sha256_remote": "77784e2448a1e7cbf6f93d484f5788314656ebb541f5bb9bf90bacb20e759017",
+    "mesh_grid_sha256_baseline": "77784e2448a1e7cbf6f93d484f5788314656ebb541f5bb9bf90bacb20e759017",
+    "mesh_grid_exact": true,
+    "lesion_volume_mm3_remote": 0.523598775598299,
+    "lesion_volume_mm3_baseline": 0.523598775598299,
+    "geometry_vba_equal_after_expected_runner_lines_removed": true
+  },
+  "numerical_comparison": {
+    "all_four_S_complex_rms": 0.00042849336057812666,
+    "all_four_S_complex_rms_percent_of_baseline": 0.07243955392048068,
+    "max_absolute_complex_difference": 0.0009693610416973842,
+    "per_curve": {
+      "S1,1": {
+        "complex_rms": 0.0005643286582638979,
+        "complex_rms_percent_of_baseline": 0.06977450436444928,
+        "max_absolute_complex_difference": 0.0009687788784420852,
+        "magnitude_db_rms": 0.00601933881535722,
+        "magnitude_db_max_absolute": 0.012289577943631613
+      },
+      "S1,2": {
+        "complex_rms": 0.00022023498130943075,
+        "complex_rms_percent_of_baseline": 0.10307010414003019,
+        "max_absolute_complex_difference": 0.0004055519229076533,
+        "magnitude_db_rms": 0.004314638784347967,
+        "magnitude_db_max_absolute": 0.008108409426887064
+      },
+      "S2,1": {
+        "complex_rms": 0.00022024075662203523,
+        "complex_rms_percent_of_baseline": 0.10307280747446261,
+        "max_absolute_complex_difference": 0.00040555783161572384,
+        "magnitude_db_rms": 0.004314719106125205,
+        "magnitude_db_max_absolute": 0.008108409426887064
+      },
+      "S2,2": {
+        "complex_rms": 0.0005647565562526945,
+        "complex_rms_percent_of_baseline": 0.06982833806512197,
+        "max_absolute_complex_difference": 0.0009693610416973842,
+        "magnitude_db_rms": 0.006017744596969526,
+        "magnitude_db_max_absolute": 0.012288638975782362
+      }
+    }
+  },
+  "runtime_comparison": {
+    "remote_to_baseline_solver_ratio": 3.3035249999998997,
+    "estimated_combined_throughput_factor_vs_baseline_machine_for_this_case": 1.3027069569626475,
+    "caveat": "One CST 2025 CPU run versus one CST 2026 GPU run; not a general hardware benchmark."
+  },
+  "local_paired_contrast_context": {
+    "all_four_S_complex_rms": 1.5981536043471782e-05,
+    "S21_complex_rms": 1.607635970262699e-05,
+    "remote_baseline_shift_to_local_paired_effect_ratio_all_four_S": 26.811775752504076,
+    "remote_baseline_shift_to_local_paired_effect_ratio_S21": 13.699665888045931,
+    "interpretation": "Absolute cross-node baselines cannot be pooled; compare matched control-contrast effects within each node."
+  }
+}
