@@ -6,7 +6,7 @@
 $ErrorActionPreference = "Stop"
 if ($DeadlineMinutes -lt 21 -or $DeadlineMinutes -gt 60) { throw "DeadlineMinutes 21 ile 60 arasında olmalıdır." }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$source = Join-Path $repo "pilot\school-widefield-cst2025-v1\source"
+$source = Join-Path $repo "pilot\school-widefield-cst2025-v2\source"
 $manifest = Join-Path $source "source-manifest.json"
 $caseTemplate = Join-Path $source "pilot-case.json"
 if (-not $OutputDir) { $OutputDir = Join-Path $repo "build\remote-pilot" }
@@ -18,9 +18,9 @@ $document = [ordered]@{
     schema_version = 1
     job_id = $jobId
     study_id = "tooth-sensor-widefield-cross-version-pilot"
-    runner = "cst-widefield-cst2025-pilot-v1"
+    runner = "cst-widefield-cst2025-pilot-v2"
     source = [ordered]@{
-        version = "fr4-widefield-txrx-cst2025-pilot-v1"
+        version = "fr4-widefield-txrx-cst2025-pilot-v2"
         sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifest).Hash.ToLowerInvariant()
     }
     parameters = [ordered]@{ case_id = [string]$case.case_id }

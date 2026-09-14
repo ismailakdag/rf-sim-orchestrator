@@ -1,17 +1,15 @@
 {
-  "source_version": "fr4-widefield-txrx-cst2025-pilot-v1",
+  "source_version": "fr4-widefield-txrx-cst2025-pilot-v2",
   "derived_from": {
     "source_version": "fr4-widefield-txrx-v1",
     "manifest_sha256": "5b64b02fcc056856155525c2ca2293ac86dba3a98d8345376553ac9b2979f402"
   },
   "sha256": {
-    "__pycache__/night_case.cpython-312.pyc": "1bd67a7c56dba90f0e598dbd05b61c74cfe45971a2abee2a46562437bce114ea",
-    "__pycache__/safety_probe.cpython-312.pyc": "1523473f019375dc18ad91907c2708d3e699acb6e47353c47fe06fa18c237452",
     "base_geometry.py": "2dc85e4c4edccac0d94fed7837a812f87f29ba38421112e892aa141c7360a77a",
     "cst_lesion_check.py": "43d6095c641bb0efde0ca243e48164a9d47bcbbfd60f100d127935fc695f3894",
     "failure_notes.py": "7d34fdba574dce857c716cce49d2de72fe1f69b098da64294d667dd1cbde6fb1",
     "legacy_geometry.py": "08af8626f75a428e66ce7837be503d4b6bce47f43244260570a81f0ab9df7e21",
-    "night_case.py": "02dddf0c2feac8f8ac4c85136206cf1e045a6c541e42aef6a58318da86b6a112",
+    "night_case.py": "e663bc7e6e47eeb00bf1f8a2c046cb7f61a8ae84bb9402b51366cd1a317a9b9d",
     "overnight_geometry.py": "6579618150c52223dabe2fec25e33291ad4640988cfde5791dd159671d4147ac",
     "pair_gate.py": "3c0157a0878ed00c47c87b5e27810c7b38b17b907cff583b5a5021940ca0398a",
     "pilot-case.json": "fcd4703ff6b7ea87e0ec37e02e2f7ce2e14715200f6e9ba1657f8274fd03f9f1",

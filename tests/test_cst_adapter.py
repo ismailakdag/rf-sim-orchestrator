@@ -85,6 +85,18 @@ class CstAdapterOfflineContractTest(unittest.TestCase):
             self.assertNotEqual(rejected.returncode, 0)
             self.assertIn("exact pinned case template", rejected.stdout + rejected.stderr)
 
+            cache = source / "__pycache__"
+            cache.mkdir()
+            bytecode = cache / "night_case.cpython-311.pyc"
+            bytecode.write_bytes(b"generated cache must never be pinned")
+            manifest_document = json.loads(source_manifest.read_text(encoding="utf-8"))
+            manifest_document["sha256"]["__pycache__/night_case.cpython-311.pyc"] = hashlib.sha256(bytecode.read_bytes()).hexdigest()
+            source_manifest.write_text(json.dumps(manifest_document), encoding="utf-8")
+            source_hash = hashlib.sha256(source_manifest.read_bytes()).hexdigest()
+            cached = execute(temp / "cached", "fixed-pilot")
+            self.assertNotEqual(cached.returncode, 0)
+            self.assertIn("generated Python cache", cached.stdout + cached.stderr)
+
     def test_t00009_shaped_job_preserves_raw_archive_and_builds_compact_views(self):
         with tempfile.TemporaryDirectory() as temp_name:
             temp = Path(temp_name)

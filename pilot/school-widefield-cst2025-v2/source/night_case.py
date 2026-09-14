@@ -648,7 +648,7 @@ def run(job_path: Path) -> int:
         record.update(geometry_metadata(job, params))
         record["geometry_manifest"] = geometry_manifest(params)
         record["simulator"] = {"product": "CST Studio Suite", "version": os.environ.get("CST_EXPECTED_VERSION", "unreported"), "api": "official local Python interface"}
-        record["source_version"] = "fr4-widefield-txrx-cst2025-pilot-v1"
+        record["source_version"] = "fr4-widefield-txrx-cst2025-pilot-v2"
         record["material_provenance"] = job["material_provenance"]
         record["fixture"] = job["fixture"]
         record["mesh_convergence_status"] = "exploratory_unconverged"

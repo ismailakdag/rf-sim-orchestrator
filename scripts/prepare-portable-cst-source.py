@@ -56,7 +56,14 @@ def main() -> int:
         safety = replace_once(safety, "sys.path.insert(0,r'E:\\CST Studio Suite 2026\\AMD64\\python_cst_libraries')", "libraries=os.environ.get('CST_PYTHON_LIBRARIES')\n    if not libraries:raise RuntimeError('CST_PYTHON_LIBRARIES is not configured')\n    sys.path.insert(0,libraries)", "safety_probe CST path")
         safety_path.write_text(safety, encoding="utf-8", newline="\n")
 
-    files = {path.relative_to(destination).as_posix(): digest(path) for path in sorted(destination.rglob("*")) if path.is_file() and path.name != "source-manifest.json"}
+    files = {
+        path.relative_to(destination).as_posix(): digest(path)
+        for path in sorted(destination.rglob("*"))
+        if path.is_file()
+        and path.name != "source-manifest.json"
+        and "__pycache__" not in path.relative_to(destination).parts
+        and path.suffix.lower() not in {".pyc", ".pyo"}
+    }
     new_manifest = {"source_version": args.source_version, "derived_from": {"source_version": old_version, "manifest_sha256": digest(manifest_path)}, "sha256": files}
     (destination / "source-manifest.json").write_text(json.dumps(new_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(json.dumps({"source_version": args.source_version, "destination": str(destination), "source_manifest_sha256": digest(destination / "source-manifest.json"), "files": len(files)}, ensure_ascii=False, indent=2))

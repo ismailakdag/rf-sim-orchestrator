@@ -46,6 +46,8 @@ def portable_relative(name: str, label: str) -> PurePosixPath:
 
 def safe_source(source_root: Path, name: str) -> Path:
     relative = portable_relative(name, "source manifest entry")
+    if "__pycache__" in relative.parts or relative.suffix.lower() in {".pyc", ".pyo"}:
+        raise RuntimeError(f"generated Python cache is not a valid frozen source: {name!r}")
     candidate = (source_root / Path(*relative.parts)).resolve(strict=True)
     if Path(os.path.commonpath((str(source_root), str(candidate)))) != source_root:
         raise RuntimeError(f"source manifest entry escapes source root: {name!r}")
