@@ -13,11 +13,20 @@ def detect_cst_installations(explicit_roots: list[str] | None = None) -> list[di
             candidates.append(Path(value))
     if value := os.environ.get("CST_STUDIO_ROOT"):
         candidates.append(Path(value))
+    program_roots = {
+        Path(value)
+        for name in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432")
+        if (value := os.environ.get(name))
+    }
+    for base in program_roots:
+        for year in range(2024, 2028):
+            candidates.append(base / f"CST Studio Suite {year}")
     for drive in ("C:", "D:", "E:"):
         for year in range(2024, 2028):
             candidates.extend(
                 [
                     Path(f"{drive}/Program Files/CST Studio Suite {year}"),
+                    Path(f"{drive}/Program Files (x86)/CST Studio Suite {year}"),
                     Path(f"{drive}/CST Studio Suite {year}"),
                 ]
             )
@@ -45,4 +54,3 @@ def detect_cst_installations(explicit_roots: list[str] | None = None) -> list[di
             }
         )
     return sorted(found, key=lambda item: (item["major"] or 0, item["root"]))
-

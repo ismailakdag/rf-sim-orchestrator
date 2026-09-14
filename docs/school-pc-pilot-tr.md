@@ -18,3 +18,5 @@ Pilot geçerse iki aşamalı temizlik açılır:
 29,5 GB boş alan tek küçük pilot için denenebilir; uzun kuyruk için yeterli olduğu kabul edilmez. İstemci, `min_free_gb=15` altına düştüğünde yeni iş kiralamaz. İlk pilotun tepe disk tüketimi ölçüldükten sonra bu eşik ve aynı anda izin verilen iş boyutu yeniden belirlenir.
 
 GPU bir zorunluluk değildir. İstemci GPU gerektirmediğini bildirir ve ilk işler `gpu=false` kullanır. Bu durum sonucu değiştirmemeli, süreyi uzatabilir; sürüm ve solver davranışı gerçek pilot kaydından doğrulanır.
+
+Kurulum taraması hem `Program Files` hem de `Program Files (x86)` altındaki standart CST 2024–2027 yollarını denetler. Sonuç boşsa gerçek CST işi gönderilmez; önce okul bilgisayarındaki `CST DESIGN ENVIRONMENT.exe` ve `AMD64\python_cst_libraries` yolları bulunup `worker.toml` içindeki `cst_roots` değeri düzeltilir.

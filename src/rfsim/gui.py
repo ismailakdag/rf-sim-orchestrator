@@ -56,14 +56,23 @@ class WorkerGui:
 
     def test(self):
         self.status.set("Host bağlantısı ve yetenek bildirimi sınanıyor…")
-        self._background(
-            lambda: (
-                "Bağlantı başarılı; tek seferlik istemci kaydı gönderildi. "
-                "Kuyruktaki işi almak için ‘İşçiyi başlat’ düğmesine basın."
-                if self.worker.presence("idle").get("accepted")
-                else "Host yanıtı doğrulanamadı."
+        def probe():
+            from .capabilities import detect_cst_installations
+
+            if not self.worker.presence("idle").get("accepted"):
+                return "Host yanıtı doğrulanamadı."
+            installs = detect_cst_installations(self.worker.cst_roots)
+            if installs:
+                cst = ", ".join(f"CST {item.get('major') or '?'}" for item in installs)
+                detail = f" Yerel taramada {cst} bulundu."
+            else:
+                detail = " Yerel taramada CST bulunamadı; mock iş çalışır, gerçek CST işi alınmamalıdır."
+            return (
+                "Bağlantı başarılı; tek seferlik istemci kaydı gönderildi."
+                + detail
+                + " Kuyruktaki işi almak için ‘İşçiyi başlat’ düğmesine basın."
             )
-        )
+        self._background(probe)
 
     def start(self):
         if self.thread and self.thread.is_alive():
