@@ -26,3 +26,16 @@ Automating Abort confirmation prevents this known modal from blocking an
 unattended timeout. It does not make a 45-minute simulation finish sooner.
 The school throughput/progress needs diagnosis before another expensive repeat.
 The local CST 2026 queue and frozen geometry/source hashes are unchanged.
+
+## User decision: no wall-clock cutoff (0.2.6)
+
+The user supplied recovery evidence showing no HF solver process, only CST GUI
+PID 15280, and explicitly allowed long school runs. The replacement v5 catalog
+has 42 finite cases with `timeout_seconds: null`; jobs have `deadline_utc: null`.
+The locally configured supervisor uses zero to explicitly disable its time cap.
+Host leases still expire unless renewed, and API call timeouts, disk checks,
+source hashes and result validation remain enforced. No far-future fake deadline
+is used. Geometry and solver accuracy settings match v4; only scheduling changes.
+The bridge gate controls release of the remaining 40 cases. A bridge failure
+means the cross-version comparison needs review, not proof the dental concept
+has failed. Install via `enable-school-cst2025-pilot.ps1` after pulling 0.2.6.

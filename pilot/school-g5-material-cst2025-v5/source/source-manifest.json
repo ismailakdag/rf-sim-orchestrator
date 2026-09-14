@@ -1,0 +1,19 @@
+{
+  "source_version": "fr4-g5-material-cst2025-v5",
+  "derived_from": {
+    "source_version": "fr4-g5-fixtured-loop-v2",
+    "manifest_sha256": "156c1f3dce48a0788141c03ea37c7771459f4a545bf21707bd8d50720637c607"
+  },
+  "cst2025_change": "V4 geometry and solver settings preserved. Explicit null case timeout and deadline disable wall-clock cancellation per user instruction.",
+  "sha256": {
+    "base_geometry.py": "df37c45bf4d6cecf53e694f03be101f0dd248b02a3dbe57e1e5392ba603652f6",
+    "case-catalog.json": "ca8f223c82a284cc5ab12cad07fbf54034d4e18051dea95c24d522061e175868",
+    "cst_lesion_check.py": "5e6a3c5eb77ef7703ba80c7d4bbd629cc02bf6ad7ee490fecd6a3b7b9cb4f83f",
+    "failure_notes.py": "258d1f481636f85b3bbff560d1e4bbb82248c68b33b49efba546a0f8ecc447fa",
+    "night_case.py": "f87a81e7f3901f973ced4428c40a24a240e7cb26df3d9d376b70c51942be4d56",
+    "overnight_geometry.py": "8335727e1d0c4553c9f699e1a8699e3823b4692a018b00b7795de342de7f2346",
+    "pair_gate.py": "e268edbba1e1bb947849b9e54e266c8974e124e83b43d5e1de46e7678297de8c",
+    "safety_probe.py": "6306a68bf4bebc4893c65c0ed50255181e734a50250037a2f755b5a2b14eda5b",
+    "serial_queue.py": "d262b7b141cc050b14088492a98ce6cae0d706786d53442a354fe28ac2a216bb"
+  }
+}

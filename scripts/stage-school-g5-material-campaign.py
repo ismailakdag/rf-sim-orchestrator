@@ -24,10 +24,10 @@ from pathlib import Path
 
 import numpy as np
 
-CONTROL_ID = "school-g5-bridge-control-v4-20260914"
-CONTRAST_ID = "school-g5-bridge-contrast-v4-20260914"
-RUNNER = "cst-g5-material-cst2025-v4"
-SOURCE = {"version": "fr4-g5-material-cst2025-v4", "sha256": "eaa48ad2ffcdd0205b71eabfde6235eebfd4b1100cdf561112b78bc4aafdc499"}
+CONTROL_ID = "school-g5-bridge-control-v5-20260914"
+CONTRAST_ID = "school-g5-bridge-contrast-v5-20260914"
+RUNNER = "cst-g5-material-cst2025-v5"
+SOURCE = {"version": "fr4-g5-material-cst2025-v5", "sha256": "08bae0e8a97ae24f18e6585ca0333679020b6a76b496bb14390826c5bbb415f7"}
 BRIDGE_CASES = {"g5-M01-nominal-near-control", "g5-M01-nominal-near-E16-S018"}
 
 
@@ -117,17 +117,17 @@ def main() -> None:
     parser.add_argument("--catalog", type=Path, required=True)
     parser.add_argument("--local-anchor-root", type=Path, required=True)
     parser.add_argument("--work-dir", type=Path, required=True)
-    parser.add_argument("--deadline-utc", required=True)
+    parser.add_argument("--deadline-utc", default=None)
     parser.add_argument("--worker-id", default="OKUL-PC-01")
     parser.add_argument("--release-remaining", action="store_true", help="submit the remaining catalog only after the bridge passes")
     args = parser.parse_args()
-    end = datetime.fromisoformat(args.deadline_utc.replace("Z", "+00:00")).astimezone(timezone.utc)
+    end = datetime.fromisoformat(args.deadline_utc.replace("Z", "+00:00")).astimezone(timezone.utc) if args.deadline_utc else None
     work = args.work_dir.resolve(); work.mkdir(parents=True, exist_ok=True)
     state_path = work / "stage-state.json"
     api = Api(args.url, args.token_file.read_text(encoding="utf-8").strip())
     state = {"schema_version": 1, "status": "waiting_bridge", "started_utc": now(), "bridge_jobs": [CONTROL_ID, CONTRAST_ID], "automatic_solver_retry": False}
     atomic_json(state_path, state)
-    while datetime.now(timezone.utc) < end:
+    while end is None or datetime.now(timezone.utc) < end:
         try:
             statuses = {job_id: api.json("GET", f"/api/v1/jobs/{job_id}") for job_id in (CONTROL_ID, CONTRAST_ID)}
             terminal_bad = {job_id: item["state"] for job_id, item in statuses.items() if item["state"] in {"failed", "needs_attention", "expired", "resolved"}}
@@ -163,13 +163,13 @@ def main() -> None:
     submitted = []
     for index, case_id in enumerate(sorted(set(catalog) - BRIDGE_CASES), 1):
         slug = case_id.lower().replace("_", "-")
-        job_id = f"school-g5m4-{index:02d}-{slug}"
+        job_id = f"school-g5m5-{index:02d}-{slug}"
         role = catalog[case_id]["legacy_job"]["role"]
         document = {
             "schema_version": 1, "job_id": job_id, "study_id": "g5-material-sensitivity-v1",
             "runner": RUNNER, "source": SOURCE, "parameters": {"case_id": case_id},
             "deadline_utc": args.deadline_utc, "priority": 80 if role == "same_material_insert" else 50,
-            "metadata": {"required_worker_id": args.worker_id, "campaign": "20260914-g5-material-sensitivity-school-v4", "stage": "material_response_surface", "case_id": case_id},
+            "metadata": {"required_worker_id": args.worker_id, "campaign": "20260914-g5-material-sensitivity-school-v5", "stage": "material_response_surface", "case_id": case_id},
         }
         response = api.json("POST", "/api/v1/jobs", document)
         submitted.append({"job_id": job_id, "case_id": case_id, "document_sha256": response["document_sha256"]})

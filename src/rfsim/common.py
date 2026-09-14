@@ -87,8 +87,8 @@ def validate_job(document: dict[str, Any], allowed_runners: set[str] | None = No
         raise ValidationError("source.version must be non-empty")
     if not isinstance(source["sha256"], str) or not SHA256_RE.fullmatch(source["sha256"]):
         raise ValidationError("source.sha256 must be a lowercase SHA-256")
-    deadline = parse_utc(document["deadline_utc"])
-    if deadline <= datetime.now(timezone.utc):
+    deadline = parse_utc(document["deadline_utc"]) if document["deadline_utc"] is not None else None
+    if deadline is not None and deadline <= datetime.now(timezone.utc):
         raise ValidationError("deadline_utc is in the past")
     priority = document.get("priority", 0)
     if type(priority) is not int or not -100 <= priority <= 100:

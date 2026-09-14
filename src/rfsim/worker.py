@@ -261,9 +261,13 @@ def run_fixed_python(job: dict, run_dir: Path, config: dict) -> None:
     # Command and placeholders come only from local configuration. The remote job cannot add flags or a shell command.
     replacements = {"{job_file}": str(job_path), "{run_dir}": str(run_dir)}
     args = [replacements.get(item, item) for item in config.get("arguments", ["{job_file}", "{run_dir}"])]
-    remaining = (parse_utc(job["deadline_utc"]) - datetime.now(timezone.utc)).total_seconds()
-    timeout = min(float(config.get("timeout_seconds", 28_800)), remaining)
-    if timeout <= 0:
+    remaining = (parse_utc(job["deadline_utc"]) - datetime.now(timezone.utc)).total_seconds() if job["deadline_utc"] is not None else None
+    configured_timeout = float(config.get("timeout_seconds", 28_800))
+    if not math.isfinite(configured_timeout) or configured_timeout < 0:
+        raise ValidationError("timeout_seconds must be finite and nonnegative; zero disables the local wall-clock limit")
+    limits = [value for value in (configured_timeout or None, remaining) if value is not None]
+    timeout = min(limits) if limits else None
+    if timeout is not None and timeout <= 0:
         raise ExecutionUncertain("job deadline passed before external process start")
     runtime_path = run_dir / "logs" / "external-process.json"
     runtime_path.parent.mkdir(parents=True, exist_ok=True)
@@ -284,7 +288,7 @@ def run_fixed_python(job: dict, run_dir: Path, config: dict) -> None:
             from .cst_abort_guard import AbortGuard
             guard = AbortGuard(run_dir)
         process = subprocess.Popen([str(python), str(script), *args], stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, shell=False, env=child_env)
-        expires = time.monotonic() + timeout
+        expires = time.monotonic() + timeout if timeout is not None else None
         write_json_atomic(runtime_path, {"pid": process.pid, "started_utc": started_utc, "timeout_seconds": timeout, "state": "running"})
         try:
             while True:
@@ -293,14 +297,14 @@ def run_fixed_python(job: dict, run_dir: Path, config: dict) -> None:
                         guard.tick()
                     except Exception as exc:
                         write_json_atomic(run_dir / 'logs/abort-guard-error.json', {"utc": utc_now(), "error": repr(exc)})
-                left = expires - time.monotonic()
-                if left <= 0:
+                left = expires - time.monotonic() if expires is not None else None
+                if left is not None and left <= 0:
                     raise subprocess.TimeoutExpired(process.args, timeout)
                 try:
-                    return_code = process.wait(timeout=min(2, left) if guard is not None else left)
+                    return_code = process.wait(timeout=min(2, left) if guard is not None and left is not None else (2 if guard is not None else left))
                     break
                 except subprocess.TimeoutExpired:
-                    if time.monotonic() >= expires:
+                    if expires is not None and time.monotonic() >= expires:
                         raise
         except subprocess.TimeoutExpired as exc:
             write_json_atomic(runtime_path, {"pid": process.pid, "started_utc": started_utc, "timeout_seconds": timeout, "state": "timeout_process_state_unknown", "automatic_termination": False, "last_observed_stage": _runner_stage(run_dir)})

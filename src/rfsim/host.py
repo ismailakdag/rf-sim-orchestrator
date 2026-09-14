@@ -184,12 +184,14 @@ class Store:
                 required_worker_id = document.get("metadata", {}).get("required_worker_id")
                 if required_worker_id is not None and required_worker_id != worker_id:
                     continue
-                if parse_utc(document["deadline_utc"]) <= now_dt:
+                deadline = parse_utc(document["deadline_utc"]) if document["deadline_utc"] is not None else None
+                if deadline is not None and deadline <= now_dt:
                     db.execute("UPDATE jobs SET state='expired',updated_utc=?,note=? WHERE job_id=?", (utc_now(), "deadline passed before lease", row["job_id"]))
                     self._event(db, row["job_id"], "deadline_expired", {})
                     continue
                 token = secrets.token_urlsafe(32)
-                expires = min(now_dt + timedelta(seconds=self.lease_seconds), parse_utc(document["deadline_utc"])).isoformat().replace("+00:00", "Z")
+                expires_dt = now_dt + timedelta(seconds=self.lease_seconds)
+                expires = (min(expires_dt, deadline) if deadline is not None else expires_dt).isoformat().replace("+00:00", "Z")
                 db.execute("UPDATE jobs SET state='leased',updated_utc=?,worker_id=?,lease_token=?,lease_expires_utc=?,attempt=attempt+1,note=NULL WHERE job_id=? AND state='queued'", (utc_now(), worker_id, token, expires, row["job_id"]))
                 self._event(db, row["job_id"], "leased", {"worker_id": worker_id, "lease_expires_utc": expires, "attempt": row["attempt"] + 1})
                 return {"job": document, "lease_token": token, "lease_expires_utc": expires, "attempt": row["attempt"] + 1}
@@ -209,8 +211,10 @@ class Store:
             if row["state"] != "leased" or row["worker_id"] != worker_id or not secure_compare(token, row["lease_token"]):
                 raise PermissionError("lease is no longer active or does not belong to this worker")
             document = json.loads(row["document"])
-            deadline = parse_utc(document["deadline_utc"])
-            expires_dt = min(datetime.now(timezone.utc) + timedelta(seconds=self.lease_seconds), deadline)
+            deadline = parse_utc(document["deadline_utc"]) if document["deadline_utc"] is not None else None
+            expires_dt = datetime.now(timezone.utc) + timedelta(seconds=self.lease_seconds)
+            if deadline is not None:
+                expires_dt = min(expires_dt, deadline)
             expires = expires_dt.isoformat().replace("+00:00", "Z")
             db.execute("UPDATE jobs SET updated_utc=?,lease_expires_utc=?,note=? WHERE job_id=?", (utc_now(), expires, f"worker stage: {stage}", job_id))
             self._event(db, job_id, "heartbeat", {"worker_id": worker_id, "stage": stage, "lease_expires_utc": expires})
@@ -295,7 +299,7 @@ class Store:
             if row["state"] not in {"failed", "needs_attention"}:
                 raise ValidationError("only failed or needs_attention jobs can be manually requeued")
             document = json.loads(db.execute("SELECT document FROM jobs WHERE job_id=?", (job_id,)).fetchone()["document"])
-            if parse_utc(document["deadline_utc"]) <= datetime.now(timezone.utc):
+            if document["deadline_utc"] is not None and parse_utc(document["deadline_utc"]) <= datetime.now(timezone.utc):
                 raise ValidationError("immutable job deadline has passed; submit a new job_id with a new deadline")
             db.execute("UPDATE jobs SET state='queued',updated_utc=?,worker_id=NULL,lease_token=NULL,lease_expires_utc=NULL,note=? WHERE job_id=?", (utc_now(), f"manual requeue: {reason}"[:2000], job_id))
             self._event(db, job_id, "manual_requeue", {"reason": reason[:2000], "previous_state": row["state"]})
