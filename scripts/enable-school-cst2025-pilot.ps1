@@ -11,11 +11,11 @@ $target = [System.IO.Path]::GetFullPath($InstallDir)
 $config = Join-Path $target "worker.toml"
 $venvPython = Join-Path $target "venv\Scripts\python.exe"
 $adapter = Join-Path $repo "adapters\candidate_local_metal_v2.py"
-$source = Join-Path $repo "pilot\school-g5-material-cst2025-v2\source"
-$manifestPath = Join-Path $source "source-manifest.json"
-$caseCatalog = Join-Path $source "case-catalog.json"
+$repoSource = Join-Path $repo "pilot\school-g5-material-cst2025-v2\source"
+$repoManifestPath = Join-Path $repoSource "source-manifest.json"
+$repoCaseCatalog = Join-Path $repoSource "case-catalog.json"
 
-foreach ($required in @($CstExecutable, $venvPython, $adapter, $manifestPath, $caseCatalog)) {
+foreach ($required in @($CstExecutable, $venvPython, $adapter, $repoManifestPath, $repoCaseCatalog)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Gerekli dosya bulunamadı: $required" }
 }
 $cstRoot = Split-Path -Parent (Resolve-Path -LiteralPath $CstExecutable).Path
@@ -41,21 +41,38 @@ if (-not $WorkerId) { $WorkerId = $env:COMPUTERNAME }
 & $venvPython -m pip install --disable-pip-version-check -e "$repo[cst]"
 if ($LASTEXITCODE -ne 0) { throw "CST bağımlılıklarının kurulumu başarısız oldu." }
 
-$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+New-Item -ItemType Directory -Force -Path $target | Out-Null
+$source = Join-Path $target "sources\fr4-g5-material-cst2025-v2"
+New-Item -ItemType Directory -Force -Path $source | Out-Null
+$manifest = Get-Content -LiteralPath $repoManifestPath -Raw | ConvertFrom-Json
 if (-not $manifest.sha256) { throw "Kaynak manifestinde sha256 haritası yok." }
-$sourceResolved = (Resolve-Path -LiteralPath $source).Path
+$repoSourceResolved = (Resolve-Path -LiteralPath $repoSource).Path
 foreach ($property in $manifest.sha256.PSObject.Properties) {
     if ($property.Name -match '(^|/)__pycache__(/|$)|\.py[co]$') {
         throw "Kaynak manifesti geçici Python önbelleği içeriyor: $($property.Name)"
     }
-    $entry = Join-Path $sourceResolved $property.Name
+    $entry = Join-Path $repoSourceResolved $property.Name
     $entryResolved = (Resolve-Path -LiteralPath $entry).Path
-    if (-not $entryResolved.StartsWith($sourceResolved + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    if (-not $entryResolved.StartsWith($repoSourceResolved + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Kaynak manifest yolu kökten çıkıyor: $($property.Name)"
     }
-    $observed = (Get-FileHash -Algorithm SHA256 -LiteralPath $entryResolved).Hash.ToLowerInvariant()
+    $staged = Join-Path $source $property.Name
+    $stagedParent = Split-Path -Parent $staged
+    New-Item -ItemType Directory -Force -Path $stagedParent | Out-Null
+    if ([IO.Path]::GetExtension($entryResolved).ToLowerInvariant() -in @('.py', '.json', '.md', '.txt')) {
+        $normalized = [regex]::Replace([IO.File]::ReadAllText($entryResolved), "\r\n?", "`n")
+        [IO.File]::WriteAllText($staged, $normalized, $utf8NoBom)
+    } else {
+        Copy-Item -LiteralPath $entryResolved -Destination $staged -Force
+    }
+    $observed = (Get-FileHash -Algorithm SHA256 -LiteralPath $staged).Hash.ToLowerInvariant()
     if ($observed -ne $property.Value) { throw "Kaynak karması uyuşmuyor: $($property.Name)" }
 }
+$manifestNormalized = [regex]::Replace([IO.File]::ReadAllText($repoManifestPath), "\r\n?", "`n")
+$manifestPath = Join-Path $source "source-manifest.json"
+[IO.File]::WriteAllText($manifestPath, $manifestNormalized, $utf8NoBom)
+$caseCatalog = Join-Path $source "case-catalog.json"
 
 $catalog = Get-Content -LiteralPath $caseCatalog -Raw | ConvertFrom-Json
 $caseIds = @($catalog.cases.PSObject.Properties.Name | Sort-Object)
@@ -71,7 +88,6 @@ function SlashPath([string]$value) {
 }
 $caseIdToml = ($caseIds | ForEach-Object { '"' + (TomlValue $_) + '"' }) -join ", "
 
-New-Item -ItemType Directory -Force -Path $target | Out-Null
 if (Test-Path -LiteralPath $config -PathType Leaf) {
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
     Copy-Item -LiteralPath $config -Destination "$config.$stamp.bak"
@@ -113,7 +129,6 @@ type = "string"
 required = true
 enum = [$caseIdToml]
 "@
-$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($config, $configText, $utf8NoBom)
 
 $launcher = Join-Path $target "RF-Sim-Okul-Istemcisi.cmd"
@@ -123,7 +138,42 @@ $launcher = Join-Path $target "RF-Sim-Okul-Istemcisi.cmd"
 pause
 "@ | Set-Content -LiteralPath $launcher -Encoding ascii
 
+$backgroundScript = Join-Path $target "start-school-worker.ps1"
+$tokenFile = Join-Path $target "worker-token.dpapi"
+$backgroundText = @"
+`$ErrorActionPreference = "Stop"
+`$mutex = New-Object Threading.Mutex(`$false, "Local\RFSimWorker-$WorkerId")
+if (-not `$mutex.WaitOne(0)) { exit 0 }
+try {
+    `$secure = Get-Content -LiteralPath "$tokenFile" -Raw | ConvertTo-SecureString
+    `$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR(`$secure)
+    try { `$env:RF_SIM_TOKEN = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(`$ptr) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR(`$ptr) }
+    & "$venvPython" -m rfsim worker --config "$config" *>> "$(Join-Path $target 'background-worker.log')"
+} finally {
+    `$mutex.ReleaseMutex()
+    `$mutex.Dispose()
+}
+"@
+[IO.File]::WriteAllText($backgroundScript, $backgroundText, $utf8NoBom)
+
+$autostartInstalled = $false
+if ($env:RF_SIM_TOKEN) {
+    $env:RF_SIM_TOKEN | ConvertTo-SecureString -AsPlainText -Force | ConvertFrom-SecureString | Set-Content -LiteralPath $tokenFile -Encoding ascii
+    $startupDir = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)
+    $startupCmd = Join-Path $startupDir 'RF-Sim-Okul-Isci.cmd'
+    $startupText = "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$backgroundScript`"`r`n"
+    [IO.File]::WriteAllText($startupCmd, $startupText, [Text.Encoding]::ASCII)
+    $autostartInstalled = $true
+}
+
 Write-Host "Pilot yapılandırması hazır. CST ve kaynak denetimi:" -ForegroundColor Green
 & $venvPython -m rfsim probe --config $config
 if ($LASTEXITCODE -ne 0) { throw "Yerel probe başarısız oldu." }
-Write-Host "Doğrulanmış yüklemeden sonra yalnız işçiye ait geçici CST verisi temizlenir. GUI: $launcher" -ForegroundColor Green
+if ($autostartInstalled) {
+    Start-Process -WindowStyle Hidden -FilePath "powershell.exe" -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', $backgroundScript)
+    Write-Host "Arka plan işçisi başlatıldı ve Windows oturum açılışına eklendi." -ForegroundColor Green
+} else {
+    Write-Warning "RF_SIM_TOKEN bu PowerShell oturumunda yoktu; otomatik başlatma kurulmadı. Belirteci ayarlayıp betiği yeniden çalıştırın."
+}
+Write-Host "Doğrulanmış yüklemeden sonra yalnız işçiye ait geçici CST verisi temizlenir. İsteğe bağlı GUI: $launcher" -ForegroundColor Green
