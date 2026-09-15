@@ -58,7 +58,7 @@ class MonitorGui:
         table.rowconfigure(0, weight=1)
         columns = [('name', 'Bilgisayar', 170), ('connection', 'Bağlantı', 100),
                    ('activity', 'Durum', 165), ('stage', 'Son bildirilen aşama', 230),
-                   ('elapsed', 'Solver süresi', 100), ('progress', 'Tamamlanan işler', 170),
+                   ('elapsed', 'Solver süresi', 100), ('remaining', 'Tahmini kalan', 170), ('progress', 'Tamamlanan işler', 170),
                    ('disk', 'Boş disk', 90), ('cst', 'CST', 65)]
         self.tree = ttk.Treeview(table, columns=[x[0] for x in columns], show='headings', selectmode='browse', height=7)
         for key, label, width in columns:
@@ -74,7 +74,7 @@ class MonitorGui:
         self.tree.tag_configure('warning', foreground='#8a3e09')
         self.tree.bind('<<TreeviewSelect>>', self.select)
         ttk.Label(frame, text='Seçili bilgisayar', font=('Segoe UI', 12, 'bold')).grid(row=4, column=0, sticky='w', pady=(20, 8))
-        self.details = tk.Text(frame, height=6, wrap='word', font=('Segoe UI', 10), background='white', foreground='#172d42', relief='flat', padx=12, pady=10)
+        self.details = tk.Text(frame, height=10, wrap='word', font=('Segoe UI', 10), background='white', foreground='#172d42', relief='flat', padx=12, pady=10)
         self.details.grid(row=5, column=0, sticky='ew')
         self.details.configure(state='disabled')
         self.status = tk.StringVar(value='Bağlantı kuruluyor…')
@@ -124,13 +124,13 @@ class MonitorGui:
         if errors:
             for old in self.rows.values():
                 if old['id'].startswith('remote:'):
-                    rows.append(dict(old, connection='Bilinmiyor', activity='Host bağlantısı yok', tone='offline'))
+                    rows.append(dict(old, connection='Bilinmiyor', activity='Host bağlantısı yok', remaining='Güncel değil', tone='offline'))
         self.rows = {row['id']: row for row in rows}
         for key in self.tree.get_children():
             if key not in self.rows:
                 self.tree.delete(key)
         for key, row in self.rows.items():
-            values = [row[name] for name in ('name', 'connection', 'activity', 'stage', 'elapsed', 'progress')]
+            values = [row.get(name, '—') for name in ('name', 'connection', 'activity', 'stage', 'elapsed', 'remaining', 'progress')]
             values += ['—' if row['disk'] is None else f"{row['disk']/1024**3:.1f} GB", row['cst']]
             if self.tree.exists(key):
                 self.tree.item(key, values=values, tags=(row['tone'],))
@@ -153,7 +153,11 @@ class MonitorGui:
         if row:
             text = (f"{row['name']}  ·  İşçi: {row['worker']}\n"
                     f"İş: {row['job']}\nSon sinyal: {timestamp(row['last'])}\n"
-                    f"Kapsam: {row['scope']}\n{row['note'] or 'Hata notu yok.'}")
+                    f"Kuyruk: {row.get('queue_progress', '—')} · Geçen takvim süresi: {row.get('queue_elapsed', '—')}\n"
+                    f"Ortalama koşu: {row.get('average', '—')} · Ortalama solver: {row.get('solver_average', '—')}\n"
+                    f"Tahmini toplam: {row.get('planned', '—')} · Tahmini kalan: {row.get('remaining', '—')}\n"
+                    f"Mesh: {row.get('mesh', 'Henüz alınmadı')} · {row.get('mesh_note', '')}\n"
+                    f"{row.get('estimate_note', '')}\nKapsam: {row['scope']}\n{row['note'] or 'Hata notu yok.'}")
         self.details.configure(state='normal')
         self.details.delete('1.0', 'end')
         self.details.insert('1.0', text)

@@ -57,3 +57,11 @@ seçilince indirilir; host hash'i ve paket manifesti doğrulanır. Önbellek
 `%LOCALAPPDATA%/RFSim/plot-cache` içindedir. Grafikler çözümü yeniden başlatmaz.
 Matplotlib yalnız izleme bilgisayarına gerekir: `pip install -e ".[monitor]"`.
 Mevcut koşul arşivlerinde sensör önizlemesi bulunmadığından bu sürüm görüntü üretmez.
+
+## Kuyruk süresi ve mesh bilgisi
+
+Panel seçili bilgisayarın etkin kampanyasını; etkin yerel kampanya yoksa son tamamlanan kampanyayı gösterir. Tamamlanan/toplam iş, atlanan iş, ortalama koşu süresi, ortalama solver süresi, geçen takvim süresi ve tahmini toplam/kalan süre ayrı alanlardır. Koşu süresi model oluşturma ve dışa aktarmayı içerir; yükleme kurtarması nedeniyle geçen saatler ortalamaya eklenmez. Takvim süresi ise duraklamaları içerir.
+
+Tahmin yalnız aynı bilgisayar/kampanya/runner grubundaki başarılı sonuçlara dayanır. Üçten az örnek ön tahmindir; bilinmeyen veya eski bağlantıda canlı ETA verilmez. Aktif solver ortalama koşu süresini aşarsa sıfır kalan süre yerine açıklama gösterilir. Kuyruğa henüz bırakılmamış koşullu işler sayılmaz. Tahmini toplam, tanımlanmış bir süre sınırı değildir.
+
+Mesh alanı tamamlanan koşulardaki gerçek hücre sayısını/aralığını gösterir; aktif işin canlı hücre sayısı veya yakınsama kanıtı değildir. Uzak sonuçlar doğrulanmış paketlerden bir kez okunup bellekte tutulur; yeni solver veya CST API sorgusu açılmaz. Açık eski paneli kapatıp masaüstündeki RF Sim İzleme kısayolundan yeniden açmak güncellemeyi yükler; simülasyonlar etkilenmez.

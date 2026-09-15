@@ -5,10 +5,112 @@ import json
 import re
 import shutil
 import socket
+import math
+import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .common import parse_utc
+
+_RECORDS = {}
+_DOCUMENTS = {}
+
+
+def queue_estimate(total, done, skipped, records, elapsed=None, available=True):
+    """Serial queue estimate; failed attempts and upload delays are not samples."""
+    samples = [r.get('total_seconds') for r in records]
+    samples = [v for v in samples if isinstance(v, (int, float)) and math.isfinite(v) and v > 0]
+    remaining = max(0, total-done-skipped)
+    mean = statistics.mean(samples) if samples else None
+    result = dict(queue_progress=f'{done}/{total} tamam · {skipped} atlandı',
+                  average=duration(mean), planned=duration(mean*total if mean else None),
+                  remaining='—', estimate_note=f'{len(samples)} başarılı koşu; model oluşturma ve dışa aktarma dahil. Tahmin, süre sınırı değildir.')
+    if remaining == 0:
+        result['remaining'] = 'Tamamlandı'
+    elif not available:
+        result['remaining'] = 'Durakladı / güncel değil'
+    elif mean is not None:
+        if elapsed is not None and elapsed >= mean:
+            result['remaining'] = 'Aktif iş ortalamayı aştı'
+        else:
+            result['remaining'] = '≈ ' + duration(mean*remaining-(elapsed or 0))
+    if len(samples) < 3:
+        result['estimate_note'] += ' Üçten az örnek: ön tahmin.'
+    return result
+
+
+def record_summary(row, records):
+    cells = [r.get('mesh_cells') for r in records if isinstance(r.get('mesh_cells'), int)]
+    row['mesh'] = (f'{min(cells):,}–{max(cells):,} hücre' if cells and min(cells) != max(cells)
+                   else f'{cells[0]:,} hücre' if cells else 'Henüz alınmadı')
+    row['mesh_note'] = 'Tamamlanan koşuların gerçek ağı; aktif işin canlı mesh bilgisi değildir.'
+    solves = [r['solve_seconds'] for r in records if isinstance(r.get('solve_seconds'), (int, float))]
+    row['solver_average'] = duration(statistics.mean(solves) if solves else None)
+
+
+def local_records(completed):
+    records = []
+    for run in completed:
+        try:
+            p = Path(run['archive'])/'record.json'
+            key = (str(p), p.stat().st_mtime_ns)
+            if key not in _RECORDS:
+                r = json.loads(p.read_text(encoding='utf-8-sig'))
+                if r.get('results_validated') is not True:
+                    continue
+                _RECORDS[key] = r
+            records.append(_RECORDS[key])
+        except (OSError, ValueError, KeyError):
+            continue
+    return records
+
+
+def enrich_remote(rows, jobs, client, now=None):
+    from .spectra import ResultRepository
+    repository = ResultRepository(client)
+    for job in jobs:
+        if 'document' not in job:
+            key = (client.base_url, job['job_id'])
+            if key not in _DOCUMENTS:
+                _DOCUMENTS[key] = client.json('GET', '/api/v1/jobs/'+job['job_id'])['document']
+            job['document'] = _DOCUMENTS[key]
+    for row in rows:
+        assigned = [j for j in jobs if j.get('worker_id') == row['worker'] or
+                    j.get('document', {}).get('metadata', {}).get('required_worker_id') == row['worker']]
+        if not assigned:
+            continue
+        active = next((j for j in assigned if j['job_id'] == row['job']), None)
+        selected = active or max(assigned, key=lambda j:j.get('submitted_utc') or '')
+        document = selected.get('document', {})
+        campaign = document.get('metadata', {}).get('campaign')
+        group = [j for j in assigned if j.get('document', {}).get('metadata', {}).get('campaign') == campaign
+                 and j.get('document', {}).get('runner') == document.get('runner')]
+        # Missing campaign metadata must not pool unrelated jobs.
+        if not campaign:
+            group = [selected]
+        records = []
+        for job in group:
+            if job['state'] != 'completed' or not job.get('result_sha256'):
+                continue
+            key = (client.base_url, job['result_sha256'])
+            try:
+                if key not in _RECORDS:
+                    _RECORDS[key] = repository.load(dict(origin='remote', id=job['job_id'], sha256=job['result_sha256']))['record']
+                records.append(_RECORDS[key])
+            except Exception:
+                row['note'] += ' Süre/mesh sonuç paketi okunamadı.'
+        _, elapsed = stage_label(active.get('note')) if active else ('', None)
+        blocked = any(j['state'] in ('needs_attention', 'failed') for j in group)
+        row.update(queue_estimate(len(group), sum(j['state']=='completed' for j in group),
+                   sum(j['state']=='resolved' for j in group), records, elapsed,
+                   row['connection']=='Çevrimiçi' and not blocked))
+        record_summary(row, records)
+        row['scope'] = campaign or selected['job_id']
+        starts = [r.get('started_utc') for r in records if r.get('started_utc')]
+        ends = [r.get('finished_utc') for r in records if r.get('finished_utc')]
+        end = parse_utc(max(ends)) if ends and all(j['state'] in ('completed', 'resolved') for j in group) else (now or datetime.now(timezone.utc))
+        row['queue_elapsed'] = duration(age(min(starts), end)) if starts else '—'
+        row['estimate_note'] += ' Yalnız hosta bırakılmış işler; koşullu sonraki liste dahil değil.'
 
 
 STAGES = {'solver_started': 'Solver başlatıldı', 'source_snapshotted': 'Kaynak hazırlanıyor',
@@ -99,12 +201,19 @@ def local_row(current_path: Path):
         root = current_path.parent
         row['disk'] = shutil.disk_usage(root).free
         current = json.loads(current_path.read_text(encoding='utf-8-sig'))
-        plan = current.get('active_campaign')
+        plan = current.get('active_campaign') or current.get('last_completed_campaign')
         if not plan:
             row['stage'] = 'Etkin kampanya yok'
             return row
         plan_path = (root / plan).resolve()
         state = json.loads((plan_path.parent / 'state.json').read_text(encoding='utf-8-sig'))
+        records = local_records(state.get('completed', []))
+        row.update(queue_estimate(len(state.get('jobs', [])), len(state.get('completed', [])),
+                                 len(state.get('skipped', [])), records))
+        record_summary(row, records)
+        finished = state.get('status') in ('completed', 'finished', 'finished_with_skips')
+        end = parse_utc(state['updated_utc']) if finished else datetime.now(timezone.utc)
+        row['queue_elapsed'] = duration(age(state.get('started_utc'), end))
         row.update(job=state.get('active_job') or '—', last=state.get('updated_utc'),
                    progress=f"{len(state.get('completed', []))}/{len(state.get('jobs', []))} tamam · {len(state.get('skipped', []))} atlandı",
                    scope=str(plan_path.parent), note=state.get('stop_reason') or '')
@@ -117,6 +226,7 @@ def local_row(current_path: Path):
         job = json.loads(Path(active_path).read_text(encoding='utf-8-sig')) if active_path else {}
         work = Path(job['work']).resolve() if job.get('work') else None
         solver = None
+        elapsed = None
         if work:
             from .cst_abort_guard import exact_model_argument
             for proc in psutil.process_iter(['name', 'cmdline']):
@@ -130,6 +240,7 @@ def local_row(current_path: Path):
             if heartbeat.is_file():
                 beat = json.loads(heartbeat.read_text(encoding='utf-8-sig'))
                 row['elapsed'] = duration(beat.get('elapsed_seconds'))
+                elapsed = beat.get('elapsed_seconds')
                 row['last'] = beat.get('utc') or row['last']
         worker_live = False
         if state.get('worker_pid') and active_path:
@@ -148,6 +259,9 @@ def local_row(current_path: Path):
             row['activity'] = 'İş yürütülüyor'
         else:
             row.update(activity='Süreç doğrulanamadı', tone='warning', note='Durum dosyasındaki aktif işlem canlı süreçle doğrulanamadı. Son kayıt gösteriliyor.')
+        row.update(queue_estimate(len(state.get('jobs', [])), len(state.get('completed', [])),
+                                 len(state.get('skipped', [])), records,
+                                 elapsed, bool(solver or worker_live)))
     except Exception as exc:
         row.update(activity='Yerel kayıt okunamadı', tone='warning', note=str(exc))
     return row
@@ -160,7 +274,9 @@ def collect(client, local_current=None):
     try:
         workers = client.json('GET', '/api/v1/workers')['workers']
         jobs = client.json('GET', '/api/v1/jobs')['jobs']
-        rows.extend(remote_rows(workers, jobs))
+        remote = remote_rows(workers, jobs)
+        enrich_remote(remote, jobs, client)
+        rows.extend(remote)
     except Exception as exc:
         errors.append('Hosta ulaşılamadı: ' + type(exc).__name__ + '. Son uzak kayıtlar güncel sayılmaz.')
     return rows, errors
