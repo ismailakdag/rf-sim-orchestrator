@@ -215,6 +215,9 @@ class CstAdapterOfflineContractTest(unittest.TestCase):
             self.assertFalse(mapping["raw_archive_preserved"])
             self.assertFalse(mapping["raw_work_preserved"])
             self.assertIn("compacted_utc", mapping)
+            from rfsim.worker import package_result
+            from rfsim.common import validate_result_zip
+            validate_result_zip(package_result(run_dir, job), job['job_id'], 100_000_000)
 
 
 if __name__ == "__main__":

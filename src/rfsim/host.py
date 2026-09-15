@@ -255,7 +255,7 @@ class Store:
             self._event(db, job_id, "worker_needs_attention", {"worker_id": worker_id, "reason": reason[:2000], "automatic_retry": False})
             return {"job_id": job_id, "state": "needs_attention"}
 
-    def accept_result(self, job_id: str, worker_id: str, token: str, source: Path, claimed_sha256: str) -> dict:
+    def accept_result(self, job_id: str, worker_id: str, token: str, source: Path, claimed_sha256: str, recovery: bool = False) -> dict:
         if not JOB_ID_RE.fullmatch(job_id):
             raise ValidationError("invalid job_id")
         size = source.stat().st_size
@@ -269,7 +269,16 @@ class Store:
             row = db.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,)).fetchone()
             if not row:
                 raise KeyError(job_id)
-            if row["state"] != "leased" or row["worker_id"] != worker_id or not secure_compare(token, row["lease_token"]):
+            if recovery:
+                if row['state'] != 'needs_attention' or row['worker_id'] != worker_id:
+                    raise PermissionError('recovery requires the original worker and a needs_attention job')
+                with zipfile.ZipFile(source) as archive:
+                    if archive.getinfo('parameters/record.json').file_size > 4*1024**2:
+                        raise ValidationError('recovery record exceeds 4 MiB')
+                    record = json.loads(archive.read('parameters/record.json'))
+                if record.get('run_id') != job_id or record.get('results_validated') is not True or record.get('project_closed') is not True:
+                    raise ValidationError('recovery requires a validated, closed CST result for this exact job')
+            elif row["state"] != "leased" or row["worker_id"] != worker_id or not secure_compare(token, row["lease_token"]):
                 raise PermissionError("invalid active lease; result retained only on worker")
             submitted_job = json.loads(row["document"])
             manifest = verified["manifest"]
@@ -285,7 +294,7 @@ class Store:
             os.replace(source, target)
             now = utc_now()
             db.execute("UPDATE jobs SET state='completed',updated_utc=?,lease_token=NULL,lease_expires_utc=NULL,result_sha256=?,result_bytes=?,note=? WHERE job_id=?", (now, digest, size, f"verified {verified['file_count']} artifacts", job_id))
-            self._event(db, job_id, "result_verified", {"worker_id": worker_id, "sha256": digest, "bytes": size, "artifact_count": verified["file_count"], "uncompressed_bytes": verified["uncompressed_bytes"]})
+            self._event(db, job_id, "result_verified", {"worker_id": worker_id, "sha256": digest, "bytes": size, "artifact_count": verified["file_count"], "uncompressed_bytes": verified["uncompressed_bytes"], "recovered_upload": recovery})
         return {"job_id": job_id, "state": "completed", "result_sha256": digest, "result_bytes": size, "artifact_count": verified["file_count"]}
 
     def manual_requeue(self, job_id: str, reason: str) -> dict:
@@ -436,8 +445,8 @@ class ApiHandler(BaseHTTPRequestHandler):
                 job_id = path.split("/")[-2]
                 body = self.read_json()
                 return self.send_json(200, self.app.store.manual_resolve(job_id, body.get("reason", "")))
-            if path.startswith("/api/v1/results/"):
-                job_id = path.removeprefix("/api/v1/results/")
+            if path.startswith("/api/v1/results/") or path.startswith("/api/v1/recover-results/"):
+                job_id = path.rsplit('/', 1)[-1]
                 length = int(self.headers.get("Content-Length", "-1"))
                 if length < 0 or length > self.app.store.max_result_bytes:
                     raise ValidationError("invalid or excessive result size")
@@ -456,7 +465,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         remaining -= len(chunk)
                     handle.flush()
                     os.fsync(handle.fileno())
-                result = self.app.store.accept_result(job_id, worker_id, lease_token, temp_path, claimed)
+                result = self.app.store.accept_result(job_id, worker_id, lease_token, temp_path, claimed, recovery=path.startswith('/api/v1/recover-results/'))
                 temp_path = None
                 return self.send_json(201, result)
             self.send_json(404, {"error": "not found"})

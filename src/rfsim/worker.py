@@ -425,7 +425,7 @@ class Worker:
             try:
                 result = self.client.upload(f"/api/v1/results/{job['job_id']}", bundle, self.worker_id, token)
             except Exception as exc:
-                raise ExecutionUncertain(f"result upload outcome is unknown; verified bundle retained at {bundle}") from exc
+                raise ExecutionUncertain(f"result upload outcome is unknown; verified bundle retained at {bundle}; cause: {exc}") from exc
             write_json_atomic(run_dir / "host-acceptance.json", result)
             if self.cleanup_after_upload:
                 receipt = self._safe_cleanup(run_dir, bundle, job, result)

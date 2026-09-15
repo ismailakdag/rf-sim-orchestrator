@@ -224,6 +224,13 @@ def main() -> int:
     }
     (run_dir / "parameters" / "transport-mapping.json").write_text(json.dumps(transport, ensure_ascii=False, indent=2), encoding="utf-8")
     exclusive_copy(legacy_job, run_dir / "logs" / "legacy-job.json")
+    # Compact transport still needs a model/ artifact. This is a reproduction
+    # pointer, not a claim that the large binary CST project was retained.
+    (run_dir / "model").mkdir(exist_ok=True)
+    (run_dir / "model" / "reproduction.json").write_text(json.dumps({
+        "model_vba": "source/model.vba", "sources": "source/pinned-source",
+        "parameters": "logs/legacy-job.json", "binary_cst_retained": not args.compact,
+    }, indent=2), encoding="utf-8")
     if args.compact:
         required = [run_dir / "source" / "source-manifest.json", run_dir / "source" / "pinned-source" / "night_case.py", run_dir / "source" / "model.vba", run_dir / "parameters" / "record.json", run_dir / "results" / "sparameters.csv.gz", run_dir / "quality" / "verified.json"]
         if not all(path.is_file() for path in required):
