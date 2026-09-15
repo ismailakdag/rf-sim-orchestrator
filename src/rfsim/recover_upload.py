@@ -35,6 +35,14 @@ def main():
     if status['state']=='completed':print(json.dumps({'already_completed':True}));return
     if status['state']!='needs_attention' or status['worker_id']!=args.worker_id:raise ValueError('Host state or worker mismatch')
     original=run.parent/(run.name+'.zip')
+    if not original.exists():
+        # A heartbeat failure can happen after export but before packaging.
+        # Require a completed, closed project; never package a live/partial run.
+        record=json.loads((run/'parameters/record.json').read_text(encoding='utf-8-sig'))
+        if record.get('results_validated') is not True or record.get('project_closed') is not True:
+            raise ValueError('Retained run is incomplete or project closure is unverified')
+        from .worker import package_result
+        original=package_result(run,job)
     import time
     target=run.parent/(run.name+f'.recovered-{time.time_ns()}.zip')
     upload=repair(original,target,job['job_id'])
