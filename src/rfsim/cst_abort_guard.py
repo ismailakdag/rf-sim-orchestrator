@@ -1,6 +1,7 @@
 """A narrow unattended handler for CST's English Keep/Discard abort dialog.
 
-No foreground input, title-only matching, licence actions or process killing.
+No foreground input, title-only matching or process killing.
+Frontend licence retrieval is limited to the exact released-frontend dialog.
 Ownership requires a running HF solver with the exact job model command argument
 and a CST GUI in its parent chain. PID creation times are rechecked before use.
 """
@@ -25,6 +26,12 @@ def is_abort_confirmation(title: str, labels: list[str]) -> bool:
     normalized = [label.replace('&', '').strip().casefold() for label in labels]
     required = ['how would you like to abort?', 'keep results', 'discard results', 'ok', 'cancel']
     return title.strip().casefold() == 'abort' and all(normalized.count(x) == 1 for x in required)
+
+
+def is_frontend_release(title: str, labels: list[str]) -> bool:
+    normalized = [label.replace('&', '').strip().casefold() for label in labels]
+    return (title.strip().casefold() == 'frontend license released'
+            and normalized.count('retrieve license') == 1)
 
 
 class AbortGuard:
@@ -79,7 +86,7 @@ class AbortGuard:
 
         candidates = []
         def visit(hwnd, _):
-            if not user.IsWindowVisible(hwnd) or text(hwnd).strip().casefold() != 'abort':
+            if not user.IsWindowVisible(hwnd) or text(hwnd).strip().casefold() not in ('abort', 'frontend license released'):
                 return True
             pid = w.DWORD()
             user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
@@ -101,6 +108,25 @@ class AbortGuard:
                     children.append((handle, text(handle), text(handle, True)))
                     return True
                 user.EnumChildWindows(hwnd, callback(child), 0)
+                if is_frontend_release(text(hwnd), [label for _, label, _ in children]):
+                    retrieve = [handle for handle, label, kind in children
+                                if kind.casefold() == 'button' and
+                                label.replace('&', '').strip().casefold() == 'retrieve license']
+                    if len(retrieve) != 1:
+                        continue
+                    evidence = dict(utc=utc_now(), model=str(self.model), pid=pid,
+                                    process_created=created, action='retrieve_frontend_license',
+                                    state='requested', automatic_retry=False)
+                    log = self.run_dir / 'logs/frontend-license-dialog.json'
+                    write_json_atomic(log, evidence)
+                    self.handled.add(identity)
+                    if psutil.Process(pid).create_time() != created:
+                        raise RuntimeError('CST process identity changed')
+                    send(retrieve[0], 0x00F5)
+                    evidence.update(state='retrieval_requested', finished_utc=utc_now())
+                    write_json_atomic(log, evidence)
+                    count += 1
+                    continue
                 if not is_abort_confirmation(text(hwnd), [label for _, label, _ in children]):
                     continue
                 buttons = {label.replace('&', '').strip().casefold(): handle
