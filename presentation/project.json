@@ -11,7 +11,7 @@
   ],
   "diagram_alt": "Ana bilgisayardaki kuyruktan okul işçisine ve sonuç arşivine akış",
   "diagram_caption": "İşçi ana bilgisayara dışarı doğru bağlanır. Dağıtılanlar bağımsız işlerdir; tek bir solver çözümünü bilgisayarlara bölme iddiası yoktur.",
-  "status": "Okul istemcisinde canlı mock aktarımı ve hosttan doğrulanmış geri indirme geçti; 27 yerel test de geçiyor.",
+  "status": "16 Eylül 2026: 63 yerel test geçti; gerçek CST 2025 okul sonuçları hostta alındı ve doğrulandı.",
   "finding_title": "Yalnız skor değil, yeniden üretilebilir sonuç.",
   "finding": "Her işin kimliği ve kaynağı, çalıştırma durumu ve dosya bütünlüğü birlikte izleniyor. Bağlantı kaybından sonra pahalı bir çözüm sessizce tekrar başlatılmıyor.",
   "work": [
@@ -21,7 +21,7 @@
     },
     {
       "title": "Tam sonuç aktarımı",
-      "body": "Model, VBA, parametreler, kompleks S, mesh, log ve kalite dosyaları; her dosya için boyut ve SHA-256."
+      "body": "Kaynak/VBA, parametreler, kompleks S, log ve kalite kayıtları; paket kapsamına göre model ve ağ kanıtları, dosya başına SHA-256."
     },
     {
       "title": "Yerel kontrol",
@@ -29,16 +29,18 @@
     }
   ],
   "verified": [
-    "Okul bilgisayarındaki gerçek istemci mock işi kiraladı; dokuz artefaktlık paket hostta kabul edildi ve aynı SHA-256 karmasıyla geri indirildi.",
-    "İş son tarihi, belirsiz durumda karantina, gerekçeli kapatma ve değişmez iş belgesi kontrolleri geçti.",
-    "CST bağdaştırıcısının ham arşivi koruyan ve yeniden üretilebilir küçük pakete indiren kipleri sahte alt süreçle doğrulandı.",
-    "Host kabulü ve paket karması doğrulanmadan yerel dosya silinmediği uçtan uca test edildi."
+    "63 regresyon testi: kuyruk, paket bütünlüğü, izleme, S-parametreleri, supervisor ve hata davranışı.",
+    "Okul CST 2025 CPU çalışmaları gerçek sonuç üretti; araştırmadaki 23 tamamlanmış paket ayrıca doğrulandı.",
+    "Host paneli işçi durumunu ve tamamlanmış S-parametrelerini gösterir; CSV/VBA dışa aktarımı desteklenir.",
+    "Mevcut okul supervisor akışı, işleri kesmeden iş aralarında test edilmiş güncellemeyi etkinleştirir."
   ],
   "limits": [
-    "Gerçek CST 2025 CPU pilotu henüz çalıştırılmadı; istemcinin son yetenek kaydında CST kurulumu görünmedi.",
-    "29,5 GB boş alan yalnız kısa pilot için değerlendirilecek; uzun kuyruğun yeterli alanı gerçek tepe tüketimiyle belirlenmeli.",
-    "Wake-on-LAN ağ, BIOS ve gerekiyorsa erişilebilir bir yerel aktarıcı gerektirir.",
-    "Büyük sonuç yüklemesi doğrudan HTTP(S) erişimi gerektirir; kurumsal proxy desteği ve ayrı kullanıcı/worker yetki rolleri henüz yoktur."
+    "Genel CST dosyası yükleyip uzaktan başlatma henüz tamamlanmış değil; izinli, kaynak karması sabit çalıştırıcılar kullanılır.",
+    "Lisans pencereleri veya belirsiz solver durumları her zaman otomatik kurtarılamaz; needs_attention inceleme gerektirir.",
+    "Compact paketlerde ham CST projesi veya ham ağ dosyası bulunmayabilir; yeniden üretim kaynakları ile paket kapsamını kontrol edin.",
+    "Ayrı kullanıcı/işçi yetkileri ve kurumsal proxy üzerinden büyük yükleme desteği açık; HTTPS ve güvenilen host gereklidir."
   ],
-  "next": "Okul bilgisayarındaki CST 2025 kurulum ve Python API yolu doğrulanır. Ardından taşınabilir kaynakla GPU kapalı, global 32 ağlı tek CST 2025 pilotu çalıştırılır. Disk tepe tüketimi ölçüldükten ve host paketi doğruladıktan sonra otomatik temizlik açılır."
+  "next": "Yeni ajan önce ayrı dizine kurmalı ve mock/regresyon testlerini çalıştırmalı. Gerçek host bağlantısı ve CST pilotu ayrı doğrulanır. school-* betikleri mevcut pilot kurulumuna özeldir.",
+  "agent_guide": "https://github.com/ismailakdag/rf-sim-orchestrator/blob/main/docs/agent-setup.md",
+  "agent_prompt": "Bu kurulum rehberini oku: https://github.com/ismailakdag/rf-sim-orchestrator/blob/main/docs/agent-setup.md . Ayrı bir dizine kur, CLI ve mock/regresyon testlerini çalıştır. Mevcut CST oturumlarına, işçilere ve kuyruğa dokunma. Gerçek bağlantıyı yalnız güvenli sağlanan adres ve token ile test et; school betiklerini başka PC’ye otomatik uygulama. Commit, geçen testler, hatalar ve test edilemeyen adımları raporla. Mock başarısını CST bağlantısı diye sunma."
 }

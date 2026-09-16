@@ -8,6 +8,17 @@ Mimariyi, hata durumlarını ve okul kurulumu öncesi karar kapılarını taray�
 
 CST 2025/2026 seçimi, boş işçiye uzaktan başlatma, kullanıcı CST projesi yükleme ve çoklu bilgisayar desteğinin planlanan kapsamı [uzak CST çalışma sistemi yol haritasında](docs/remote-cst-roadmap-tr.md) tutulur.
 
+## Güncel durum ve kurulum
+
+- [AI ajanı için kurulum ve doğrulama](docs/agent-setup.md): ayrı kurulum, mock test ve gerçek bağlantı adımları.
+- [Web dokümantasyonu](https://rflab.akdag.dev/rf-sim-orchestrator.html).
+- [Bilgisayar ve S-parametreleri paneli](docs/host-monitor-tr.md).
+- [Mevcut okul kurulumunda otomatik güncelleme](docs/school-auto-update.md).
+
+16 Eylül 2026 denetiminde 63 yerel test geçti. CST 2025 okul işçisi gerçek simülasyon paketlerini hosta iletti; araştırma projesindeki 23 tamamlanmış paket ayrıca indirildi ve doğrulandı. Bu, her CST modeli veya lisans hatasının desteklendiği anlamına gelmez. Compact paketlerde ikili CST projesi ve ham ağ dosyası bulunmayabilir; kaynak/VBA, yeniden üretim ve bütünlük kayıtları ayrı değerlendirilir.
+
+`school-*` betikleri mevcut okul pilotuna özeldir. Yeni bilgisayarda önce genel ajan rehberini izleyin. Vercel sayfası statik dokümantasyondur; Python host ve CST işçisi kendi makinelerinde çalışır. Mevcut supervisor Windows oturum açılışında başlar ve iş aralarında doğrulanmış sürümü etkinleştirir; bütün kapanma/lisans durumlarından otomatik kurtarma hâlâ açık iştir.
+
 ## Güvenlik ve hata davranışı
 
 Tüm HTTP uçları en az 32 karakterlik aynı Bearer belirteciyle doğrulanır. Düz HTTP, belirteci ağ üzerinde korumaz; gerçek ağda HTTPS kullanılmalıdır. TLS doğrudan host yapılandırmasında veya kurumun HTTPS ters vekilinde sonlandırılabilir. Belirteci Git'e ya da TOML dosyasına yazmayın; `RF_SIM_TOKEN` ortam değişkeninde tutun.
