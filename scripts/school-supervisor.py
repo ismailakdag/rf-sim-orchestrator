@@ -169,7 +169,12 @@ def main():
                 save(state='worker_running')
                 env = dict(os.environ, PYTHONPATH=str(active / 'src'), PYTHONDONTWRITEBYTECODE='1', PYTHONUTF8='1')
                 # No timeout: the pinned runner owns its job lifecycle.
-                child = subprocess.run([sys.executable, '-m', 'rfsim', 'worker', '--once', '--config', str(args.config)], env=env)
+                # Never propagate a child's traceback to the PowerShell native
+                # stderr stream: Windows PowerShell may terminate its launcher
+                # under ErrorActionPreference=Stop, orphaning the supervisor.
+                with (base / 'managed-worker.log').open('a', encoding='utf-8') as output:
+                    child = subprocess.run([sys.executable, '-m', 'rfsim', 'worker', '--once', '--config', str(args.config)],
+                                           env=env, stdout=output, stderr=subprocess.STDOUT)
                 save(state='between_jobs', last_worker_exit=child.returncode)
         except Exception as exc:
             save(state='connection_or_supervisor_error', error=str(exc))

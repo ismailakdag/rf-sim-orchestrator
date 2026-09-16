@@ -43,7 +43,12 @@ try {
                 `$script=Join-Path `$status.active_release 'scripts\school-supervisor.py'
             }
         }
-        & '$python' `$script --repo '$repo' --config '$config' --recover-job '$RecoverJob' --one-cycle *>> '$log'
+        try {
+            `$step=Start-Process -FilePath '$python' -WindowStyle Hidden -Wait -PassThru -ArgumentList @(
+                ('"'+`$script+'"'),'--repo','"$repo"','--config','"$config"',
+                '--recover-job','$RecoverJob','--one-cycle') -RedirectStandardOutput '$target\supervisor-step.stdout.log' -RedirectStandardError '$target\supervisor-step.stderr.log'
+            if(`$step.ExitCode -ne 0){Add-Content -LiteralPath '$log' -Value ('Supervisor step exited: '+`$step.ExitCode)}
+        } catch {Add-Content -LiteralPath '$log' -Value (`$_ | Out-String)}
         Start-Sleep -Seconds 15
     }
 } finally {`$mutex.ReleaseMutex();`$mutex.Dispose()}
