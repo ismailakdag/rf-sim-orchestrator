@@ -42,5 +42,6 @@
   ],
   "next": "Yeni ajan önce ayrı dizine kurmalı ve mock/regresyon testlerini çalıştırmalı. Gerçek host bağlantısı ve CST pilotu ayrı doğrulanır. school-* betikleri mevcut pilot kurulumuna özeldir.",
   "agent_guide": "https://github.com/ismailakdag/rf-sim-orchestrator/blob/main/docs/agent-setup.md",
-  "agent_prompt": "Bu kurulum rehberini oku: https://github.com/ismailakdag/rf-sim-orchestrator/blob/main/docs/agent-setup.md . Ayrı bir dizine kur, CLI ve mock/regresyon testlerini çalıştır. Mevcut CST oturumlarına, işçilere ve kuyruğa dokunma. Gerçek bağlantıyı yalnız güvenli sağlanan adres ve token ile test et; school betiklerini başka PC’ye otomatik uygulama. Commit, geçen testler, hatalar ve test edilemeyen adımları raporla. Mock başarısını CST bağlantısı diye sunma."
+  "agent_prompt": "Bu kurulum rehberini oku: https://github.com/ismailakdag/rf-sim-orchestrator/blob/main/docs/agent-setup.md . Ayrı bir dizine kur, CLI ve mock/regresyon testlerini çalıştır. Mevcut CST oturumlarına, işçilere ve kuyruğa dokunma. Gerçek bağlantıyı yalnız güvenli sağlanan adres ve token ile test et; school betiklerini başka PC’ye otomatik uygulama. Commit, geçen testler, hatalar ve test edilemeyen adımları raporla. Mock başarısını CST bağlantısı diye sunma.",
+  "updated": "2026-09-16T17:55:57.618774+00:00"
 }
